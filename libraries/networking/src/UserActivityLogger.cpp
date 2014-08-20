@@ -70,7 +70,7 @@ void UserActivityLogger::logAction(QString action, QJsonObject details, JSONCall
 }
 
 void UserActivityLogger::requestFinished(const QJsonObject& object) {
-    // qDebug() << object;
+     //qDebug() << object;
 }
 
 void UserActivityLogger::requestError(QNetworkReply::NetworkError error,const QString& string) {
@@ -87,6 +87,23 @@ void UserActivityLogger::launch(QString applicationVersion) {
 }
 
 void UserActivityLogger::close(int delayTime) {
+    // save 'NOT online' to the data web
+    // This will probably not work if interface crashed
+    
+    AccountManager& accountManager = AccountManager::getInstance();
+    
+    QJsonObject updatedLocationObject;
+    QJsonObject addressObject;
+    
+    // GET_USER_ADDRESS does not return a online field, so use the domain field.
+    addressObject.insert("domain", QString() + "Offline");
+    
+    updatedLocationObject.insert("address", addressObject);
+    
+    accountManager.authenticatedRequest("/api/v1/users/address", QNetworkAccessManager::PutOperation,
+                                        JSONCallbackParameters(), QJsonDocument(updatedLocationObject).toJson());
+
+    
     const QString ACTION_NAME = "close";
     
     // In order to get the end of the session, we need to give the account manager enough time to send the packet.

@@ -3378,7 +3378,11 @@ void Application::updateLocationInServer() {
         addressObject.insert("position", QString(createByteArray(_myAvatar->getPosition())));
         addressObject.insert("orientation", QString(createByteArray(glm::degrees(safeEulerAngles(_myAvatar->getOrientation())))));
         addressObject.insert("domain", NodeList::getInstance()->getDomainHandler().getHostname());
-
+        
+        // https://data.highfidelity.io/api/v1/users/Ryan/address will not give back added fields ...
+        // I think an online should contain at least Yes or No.
+        // addressObject.insert("online", QString() + "Yes");
+        
         updatedLocationObject.insert("address", addressObject);
 
         if (updatedLocationObject != lastLocationObject) {
