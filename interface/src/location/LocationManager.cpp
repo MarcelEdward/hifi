@@ -15,6 +15,8 @@
 #include "LocationManager.h"
 #include <UserActivityLogger.h>
 
+#include "XmppClient.h"
+
 const QString GET_USER_ADDRESS = "/api/v1/users/%1/address";
 const QString GET_PLACE_ADDRESS = "/api/v1/places/%1";
 const QString GET_ADDRESSES = "/api/v1/addresses/%1";
@@ -114,15 +116,36 @@ void LocationManager::goToAddressFromResponse(const QJsonObject& responseData) {
     }
 }
 
-void LocationManager::goToUser(QString userName) {
-    JSONCallbackParameters callbackParams;
-    callbackParams.jsonCallbackReceiver = Application::getInstance()->getAvatar();
-    callbackParams.jsonCallbackMethod = "goToLocationFromResponse";
+bool LocationManager::chatWindowContainsParticipantName(const QString& Name) {
+    const QXmppMucRoom* publicChatRoom = XmppClient::getInstance().getPublicChatRoom();
+    QStringList participants = XmppClient::getInstance().getPublicChatRoom()->participants();
+    foreach (const QString& participant, participants) {
+        QString participantName = participant.right(participant.count() - 1 - publicChatRoom->jid().count());
+        if (participantName.toLower() == Name.toLower()) {
+            return true;
+        }
+    }
+    return false;
+}
 
-    userName = QString(QUrl::toPercentEncoding(userName));
-    AccountManager::getInstance().authenticatedRequest(GET_USER_ADDRESS.arg(userName),
-                                                       QNetworkAccessManager::GetOperation,
-                                                       callbackParams);
+void LocationManager::goToUser(QString userName) {
+    // check if the user is online
+    if (chatWindowContainsParticipantName(userName)) {
+        JSONCallbackParameters callbackParams;
+        callbackParams.jsonCallbackReceiver = Application::getInstance()->getAvatar();
+        callbackParams.jsonCallbackMethod = "goToLocationFromResponse";
+        
+        userName = QString(QUrl::toPercentEncoding(userName));
+        AccountManager::getInstance().authenticatedRequest(GET_USER_ADDRESS.arg(userName),
+                                                           QNetworkAccessManager::GetOperation,
+                                                           callbackParams);
+    } else {
+        // the user is not online, show a message
+        QMessageBox msgBox;
+        msgBox.setText(tr("@%1 is not online.").arg(userName));
+        msgBox.setStandardButtons(QMessageBox::Ok);
+        msgBox.exec();
+    }
 }
 
 void LocationManager::goToPlace(QString placeName) {
