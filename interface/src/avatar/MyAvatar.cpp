@@ -1853,11 +1853,7 @@ void MyAvatar::resetSize() {
 void MyAvatar::goToLocationFromResponse(const QJsonObject& jsonObject) {
     if (jsonObject["status"].toString() == "success") {
         QJsonObject locationObject = jsonObject["data"].toObject()["address"].toObject();
-        if (locationObject["domain"].toString() == "Offline") {
-            QMessageBox::warning(Application::getInstance()->getWindow(), "", "The user is offline.");
-        } else {
-            goToLocationFromAddress(locationObject);
-        }
+        goToLocationFromAddress(locationObject);
     } else {
         QMessageBox::warning(Application::getInstance()->getWindow(), "", "That user or location could not be found.");
     }
