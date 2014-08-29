@@ -40,8 +40,7 @@ public:
 
 private:
     void replaceLastOccurrence(const QChar search, const QChar replace, QString& string);
-    bool chatWindowContainsParticipantName(const QString& Name);
-    
+
 signals:
     void creationCompleted(LocationManager::NamedLocationCreateResponse response);
     void multipleDestinationsFound(const QJsonObject& userData, const QJsonObject& placeData);
