@@ -1850,11 +1850,22 @@ void MyAvatar::resetSize() {
     qDebug("Reseted scale to %f", _targetScale);
 }
 
+void MyAvatar::goToLocationFromResponseAvatarNotOnline(QNetworkReply::NetworkError error, const QString& errorString) {
+    QMessageBox::warning(Application::getInstance()->getWindow(), "", "The user or location could not be found.");
+}
+
 void MyAvatar::goToLocationFromResponse(const QJsonObject& jsonObject) {
     if (jsonObject["status"].toString() == "success") {
         QJsonObject locationObject = jsonObject["data"].toObject()["address"].toObject();
-        goToLocationFromAddress(locationObject);
+        bool isOnline = jsonObject["data"].toObject()["online"].toBool();
+        if (isOnline ) {
+            goToLocationFromAddress(locationObject);
+        } else {
+            qDebug() << jsonObject;
+            QMessageBox::warning(Application::getInstance()->getWindow(), "", "The user is not online.");
+        }
     } else {
+        // It should not come here, this function is only called when the status is succes
         QMessageBox::warning(Application::getInstance()->getWindow(), "", "That user or location could not be found.");
     }
 }

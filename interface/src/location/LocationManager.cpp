@@ -118,7 +118,9 @@ void LocationManager::goToUser(QString userName) {
     JSONCallbackParameters callbackParams;
     callbackParams.jsonCallbackReceiver = Application::getInstance()->getAvatar();
     callbackParams.jsonCallbackMethod = "goToLocationFromResponse";
-
+    callbackParams.errorCallbackReceiver = Application::getInstance()->getAvatar();
+    callbackParams.errorCallbackMethod = "goToLocationFromResponseAvatarNotOnline";
+    
     userName = QString(QUrl::toPercentEncoding(userName));
     AccountManager::getInstance().authenticatedRequest(GET_USER_ADDRESS.arg(userName),
                                                        QNetworkAccessManager::GetOperation,
