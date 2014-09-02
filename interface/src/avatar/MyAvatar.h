@@ -155,7 +155,6 @@ public slots:
     void resetSize();
     
     void goToLocationFromResponse(const QJsonObject& jsonObject);
-    void goToLocationFromResponseAvatarNotOnline(QNetworkReply::NetworkError error, const QString& errorString);
     void goToLocationFromAddress(const QJsonObject& jsonObject);
 
     //  Set/Get update the thrust that will move the avatar around
