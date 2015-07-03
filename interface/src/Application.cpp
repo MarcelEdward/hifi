@@ -123,6 +123,7 @@
 #include "devices/MIDIManager.h"
 #include "devices/OculusManager.h"
 #include "devices/TV3DManager.h"
+#include "devices/3Dconnexion.h"
 
 #include "scripting/AccountScriptingInterface.h"
 #include "scripting/AudioDeviceScriptingInterface.h"
@@ -641,6 +642,8 @@ Application::Application(int& argc, char** argv, QElapsedTimer &startup_time) :
     auto applicationUpdater = DependencyManager::get<AutoUpdater>();
     connect(applicationUpdater.data(), &AutoUpdater::newVersionIsAvailable, dialogsManager.data(), &DialogsManager::showUpdateDialog);
     applicationUpdater->checkForUpdate();
+    
+    ConnexionClient::init();
 }
 
 void Application::aboutToQuit() {
@@ -737,6 +740,7 @@ Application::~Application() {
 
     Leapmotion::destroy();
     RealSense::destroy();
+    ConnexionClient::destroy();
 
     qInstallMessageHandler(NULL); // NOTE: Do this as late as possible so we continue to get our log messages
 }
