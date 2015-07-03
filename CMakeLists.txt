@@ -49,7 +49,7 @@ if (WIN32)
 else ()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -fno-strict-aliasing -Wno-unused-parameter")
   if (CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb")
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -Woverloaded-virtual -Wdouble-promotion")
   endif ()
 endif(WIN32)
 
@@ -132,6 +132,9 @@ if (APPLE)
   # set that as the SDK to use
   set(CMAKE_OSX_SYSROOT ${_OSX_DESIRED_SDK_PATH}/MacOSX10.9.sdk)
 endif ()
+
+# Hide automoc folders (for IDEs)
+set(AUTOGEN_TARGETS_FOLDER "hidden/generated")
 
 # Find includes in corresponding build directories
 set(CMAKE_INCLUDE_CURRENT_DIR ON)

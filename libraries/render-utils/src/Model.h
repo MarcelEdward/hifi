@@ -240,6 +240,8 @@ public:
     AABox getPartBounds(int meshIndex, int partIndex);
     void renderPart(RenderArgs* args, int meshIndex, int partIndex, bool translucent);
 
+    bool initWhenReady(render::ScenePointer scene);
+
 protected:
     QSharedPointer<NetworkGeometry> _geometry;
     
@@ -312,6 +314,12 @@ protected:
         _calculatedMeshTrianglesValid = false;
     }
 
+    // rebuild the clusterMatrices from the current jointStates
+    void updateClusterMatrices();
+
+    // hook for derived classes to be notified when setUrl invalidates the current model.
+    virtual void onInvalidate() {};
+
 private:
     
     friend class AnimationHandle;
@@ -369,7 +377,8 @@ private:
     };
 
     QHash<QPair<int,int>, AABox> _calculatedMeshPartBoxes; // world coordinate AABoxes for all sub mesh part boxes
-    QHash<QPair<int,int>, qint64> _calculatedMeshPartOffet;
+    QHash<QPair<int,int>, qint64> _calculatedMeshPartOffset;
+    bool _calculatedMeshPartOffsetValid;
    
     
     bool _calculatedMeshPartBoxesValid;
@@ -381,6 +390,7 @@ private:
     QMutex _mutex;
 
     void recalculateMeshBoxes(bool pickAgainstTriangles = false);
+    void recalculateMeshPartOffsets();
 
     void segregateMeshGroups(); // used to calculate our list of translucent vs opaque meshes
 

@@ -21,6 +21,7 @@
 #include "Menu.h"
 #include "SkeletonModel.h"
 #include "Util.h"
+#include "InterfaceLogging.h"
 
 enum StandingFootState {
     LEFT_FOOT,
@@ -38,7 +39,8 @@ SkeletonModel::SkeletonModel(Avatar* owningAvatar, QObject* parent) :
     _standingFoot(NO_FOOT),
     _standingOffset(0.0f),
     _clampedFootPosition(0.0f),
-    _headClipDistance(DEFAULT_NEAR_CLIP)
+    _headClipDistance(DEFAULT_NEAR_CLIP),
+    _isFirstPerson(false)
 {
     assert(_owningAvatar);
     _enableShapes = true;
@@ -98,7 +100,7 @@ void SkeletonModel::simulate(float deltaTime, bool fullUpdate) {
     setRotation(_owningAvatar->getOrientation() * refOrientation);
     setScale(glm::vec3(1.0f, 1.0f, 1.0f) * _owningAvatar->getScale());
     setBlendshapeCoefficients(_owningAvatar->getHead()->getBlendshapeCoefficients());
-    
+
     Model::simulate(deltaTime, fullUpdate);
     
     if (!isActive() || !_owningAvatar->isMyAvatar()) {
@@ -138,6 +140,11 @@ void SkeletonModel::simulate(float deltaTime, bool fullUpdate) {
     } else {
         applyPalmData(geometry.leftHandJointIndex, hand->getPalms()[leftPalmIndex]);
         applyPalmData(geometry.rightHandJointIndex, hand->getPalms()[rightPalmIndex]);
+    }
+
+    if (_isFirstPerson) {
+        cauterizeHead();
+        updateClusterMatrices();
     }
 
     _boundingShape.setTranslation(_translation + _rotation * _boundingShapeLocalOffset);
@@ -769,24 +776,24 @@ void SkeletonModel::resetShapePositionsToDefaultPose() {
     _boundingShape.setRotation(_rotation);
 }
 
-void SkeletonModel::renderBoundingCollisionShapes(float alpha) {
+void SkeletonModel::renderBoundingCollisionShapes(gpu::Batch& batch, float alpha) {
     const int BALL_SUBDIVISIONS = 10;
     if (_shapes.isEmpty()) {
         // the bounding shape has not been propery computed
         // so no need to render it
         return;
     }
-    glPushMatrix();
-
     Application::getInstance()->loadTranslatedViewMatrix(_translation);
 
     // draw a blue sphere at the capsule endpoint
     glm::vec3 endPoint;
     _boundingShape.getEndPoint(endPoint);
     endPoint = endPoint - _translation;
-    glTranslatef(endPoint.x, endPoint.y, endPoint.z);
+    Transform transform = Transform();
+    transform.setTranslation(endPoint);
+    batch.setModelTransform(transform);
     auto geometryCache = DependencyManager::get<GeometryCache>();
-    geometryCache->renderSphere(_boundingShape.getRadius(), BALL_SUBDIVISIONS, BALL_SUBDIVISIONS, glm::vec4(0.6f, 0.6f, 0.8f, alpha));
+    geometryCache->renderSphere(batch, _boundingShape.getRadius(), BALL_SUBDIVISIONS, BALL_SUBDIVISIONS, glm::vec4(0.6f, 0.6f, 0.8f, alpha));
 
     // draw a yellow sphere at the capsule startpoint
     glm::vec3 startPoint;
@@ -798,11 +805,63 @@ void SkeletonModel::renderBoundingCollisionShapes(float alpha) {
 
     // draw a green cylinder between the two points
     glm::vec3 origin(0.0f);
-    Avatar::renderJointConnectingCone( origin, axis, _boundingShape.getRadius(), _boundingShape.getRadius(), glm::vec4(0.6f, 0.8f, 0.6f, alpha));
-
-    glPopMatrix();
+    Avatar::renderJointConnectingCone(batch,  origin, axis, _boundingShape.getRadius(), _boundingShape.getRadius(), glm::vec4(0.6f, 0.8f, 0.6f, alpha));
 }
 
 bool SkeletonModel::hasSkeleton() {
     return isActive() ? _geometry->getFBXGeometry().rootJointIndex != -1 : false;
+}
+
+void SkeletonModel::initHeadBones() {
+    _headBones.clear();
+    const FBXGeometry& fbxGeometry = _geometry->getFBXGeometry();
+    const int neckJointIndex = fbxGeometry.neckJointIndex;
+    std::queue<int> q;
+    q.push(neckJointIndex);
+    _headBones.push_back(neckJointIndex);
+
+    // fbxJoints only hold links to parents not children, so we have to do a bit of extra work here.
+    while (q.size() > 0) {
+        int jointIndex = q.front();
+        for (int i = 0; i < fbxGeometry.joints.size(); i++) {
+            const FBXJoint& fbxJoint = fbxGeometry.joints[i];
+            if (jointIndex == fbxJoint.parentIndex) {
+                _headBones.push_back(i);
+                q.push(i);
+            }
+        }
+        q.pop();
+    }
+}
+
+void SkeletonModel::invalidateHeadBones() {
+    _headBones.clear();
+}
+
+void SkeletonModel::cauterizeHead() {
+    if (isActive()) {
+        const FBXGeometry& geometry = _geometry->getFBXGeometry();
+        const int neckJointIndex = geometry.neckJointIndex;
+        if (neckJointIndex > 0 && neckJointIndex < _jointStates.size()) {
+
+            // lazy init of headBones
+            if (_headBones.size() == 0) {
+                initHeadBones();
+            }
+
+            // preserve the translation for the neck
+            glm::vec4 trans = _jointStates[neckJointIndex].getTransform()[3];
+            glm::vec4 zero(0, 0, 0, 0);
+            for (const int &i : _headBones) {
+                JointState& joint = _jointStates[i];
+                glm::mat4 newXform(zero, zero, zero, trans);
+                joint.setTransform(newXform);
+                joint.setVisibleTransform(newXform);
+            }
+        }
+    }
+}
+
+void SkeletonModel::onInvalidate() {
+    invalidateHeadBones();
 }

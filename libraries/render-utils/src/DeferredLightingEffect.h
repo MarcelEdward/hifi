@@ -34,10 +34,7 @@ public:
     void init(AbstractViewStateInterface* viewState);
 
     /// Sets up the state necessary to render static untextured geometry with the simple program.
-    void bindSimpleProgram(gpu::Batch& batch, bool textured = false);
-    
-    /// Tears down the state necessary to render static untextured geometry with the simple program.
-    void releaseSimpleProgram(gpu::Batch& batch);
+    void bindSimpleProgram(gpu::Batch& batch, bool textured = false, bool culled = true, bool emmisive = false);
 
     //// Renders a solid sphere with the simple program.
     void renderSolidSphere(gpu::Batch& batch, float radius, int slices, int stacks, const glm::vec4& color);
@@ -66,8 +63,8 @@ public:
     void addSpotLight(const glm::vec3& position, float radius, const glm::vec3& color = glm::vec3(1.0f, 1.0f, 1.0f),
         float intensity = 0.5f, const glm::quat& orientation = glm::quat(), float exponent = 0.0f, float cutoff = PI);
     
-    void prepare();
-    void render();
+    void prepare(RenderArgs* args);
+    void render(RenderArgs* args);
     void copyBack(RenderArgs* args);
 
     void setupTransparent(RenderArgs* args, int lightBufferUnit);
@@ -100,7 +97,9 @@ private:
     static void loadLightProgram(const char* fragSource, bool limited, ProgramObject& program, LightLocations& locations);
     
     gpu::PipelinePointer _simpleProgram;
-    gpu::PipelinePointer _simpleProgramTextured;
+    gpu::PipelinePointer _simpleProgramCullNone;
+    gpu::PipelinePointer _simpleProgramEmissive;
+    gpu::PipelinePointer _simpleProgramEmissiveCullNone;
 
     ProgramObject _directionalSkyboxLight;
     LightLocations _directionalSkyboxLightLocations;

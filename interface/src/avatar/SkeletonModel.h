@@ -101,7 +101,7 @@ public:
     const glm::vec3& getStandingOffset() const { return _standingOffset; }
 
     void computeBoundingShape(const FBXGeometry& geometry);
-    void renderBoundingCollisionShapes(float alpha);
+    void renderBoundingCollisionShapes(gpu::Batch& batch, float alpha);
     float getBoundingShapeRadius() const { return _boundingShape.getRadius(); }
     const CapsuleShape& getBoundingShape() const { return _boundingShape; }
     const glm::vec3 getBoundingShapeOffset() const { return _boundingShapeLocalOffset; }
@@ -111,6 +111,11 @@ public:
     bool hasSkeleton();
 
     float getHeadClipDistance() const { return _headClipDistance; }
+
+    void setIsFirstPerson(bool value) { _isFirstPerson = value; }
+    bool getIsFirstPerson() const { return _isFirstPerson; }
+
+    virtual void onInvalidate() override;
 
 signals:
 
@@ -132,7 +137,11 @@ protected:
     void maybeUpdateLeanRotation(const JointState& parentState, JointState& state);
     void maybeUpdateNeckRotation(const JointState& parentState, const FBXJoint& joint, JointState& state);
     void maybeUpdateEyeRotation(const JointState& parentState, const FBXJoint& joint, JointState& state);
-    
+
+    void cauterizeHead();
+    void initHeadBones();
+    void invalidateHeadBones();
+
 private:
 
     void renderJointConstraints(int jointIndex);
@@ -164,6 +173,9 @@ private:
     glm::vec3 _clampedFootPosition;
 
     float _headClipDistance;  // Near clip distance to use if no separate head model
+
+    bool _isFirstPerson;
+    std::vector<int> _headBones;
 };
 
 #endif // hifi_SkeletonModel_h
