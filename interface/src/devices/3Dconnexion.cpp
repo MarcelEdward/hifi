@@ -25,7 +25,7 @@ ConnexionData::ConnexionData() {
 }
 
 void ConnexionData::handleAxisEvent() {
-	qCWarning(interfaceapp) << "pos state x = " << cc_position.x << " y = " << cc_position.y << " z = " << cc_position.z << " Rotation x = " << cc_rotation.x << " y = " << cc_rotation.y << " z = " << cc_rotation.z;
+	//qCWarning(interfaceapp) << "pos state x = " << cc_position.x << " y = " << cc_position.y << " z = " << cc_position.z << " Rotation x = " << cc_rotation.x << " y = " << cc_rotation.y << " z = " << cc_rotation.z;
 	_axisStateMap[makeInput(POSITION_AXIS_X_POS).getChannel()] = (cc_position.x > 0.0f) ? cc_position.x / MAX_AXIS : 0.0f;
 	_axisStateMap[makeInput(POSITION_AXIS_X_NEG).getChannel()] = (cc_position.x < 0.0f) ? -cc_position.x / MAX_AXIS : 0.0f;
 	_axisStateMap[makeInput(POSITION_AXIS_Y_POS).getChannel()] = (cc_position.y > 0.0f) ? cc_position.y / MAX_AXIS : 0.0f;
