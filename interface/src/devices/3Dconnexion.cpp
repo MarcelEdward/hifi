@@ -6,7 +6,7 @@
 //
 //
 
-#include "3DConnexion.h"
+#include "3Dconnexion.h"
 #include "UserActivityLogger.h"
 
 const float MAX_AXIS = 75.0f;  // max forward = 2x speed
