@@ -149,21 +149,34 @@ UserInputMapper::Input ConnexionData::makeInput(ConnexionData::PositionChannel a
 	return UserInputMapper::Input(_deviceID, axis, UserInputMapper::ChannelType::AXIS);
 }
 
+void ConnexionData::update()
+{
+    // the update is done in the ConnexionClient class.
+    // for windows in the nativeEventFilter the inputmapper is connected or registed or removed when an 3Dconnnexion device is attached or deteched
+    // for osx the api will call DeviceAddedHandler or DeviceRemoveHandler when a 3Dconnexion device is attached or detached
+}
+
 #ifdef HAVE_CONNEXIONCLIENT
 
 #ifdef _WIN32
 
 static ConnexionClient* gMouseInput = 0;
 
+ConnexionClient& ConnexionClient::getInstance() {
+    static ConnexionClient sharedInstance;
+    return sharedInstance;
+}
+
 void ConnexionClient::init() {
 	if (ConnexionClient::Is3dmouseAttached()) { 
 		ConnexionClient& cclient = ConnexionClient::getInstance();
 		cclient.client = new ConnexionClient();
 	}
-
 }
 
 void ConnexionClient::destroy() {
+    ConnexionClient& cclient = ConnexionClient::getInstance();
+    delete cclient.client;
 }
 
 #define LOGITECH_VENDOR_ID 0x46d
@@ -270,7 +283,19 @@ unsigned short HidToVirtualKey(unsigned long pid, unsigned short hidKeyCode) {
 }
 
 bool ConnexionClient::RawInputEventFilter(void* msg, long* result) {
-	if (gMouseInput == 0) return false;
+    ConnexionData& connexiondata = ConnexionData::getInstance();
+    if (ConnexionClient::Is3dmouseAttached() && connexiondata.getDeviceID() == 0) {
+		connexiondata.registerToUserInputMapper(*Application::getUserInputMapper());
+		connexiondata.assignDefaultInputMapping(*Application::getUserInputMapper());
+        UserActivityLogger::getInstance().connectedDevice("controller", "3Dconnexion");
+    } else if (!ConnexionClient::Is3dmouseAttached() && connexiondata.getDeviceID() != 0) {
+        Application::getUserInputMapper()->removeDevice(connexiondata.getDeviceID());
+        connexiondata.setDeviceID(0);
+    }
+
+    if (!ConnexionClient::Is3dmouseAttached()) {
+        return false;
+    }
 
 	MSG* message = (MSG*)(msg);
 
@@ -285,10 +310,7 @@ bool ConnexionClient::RawInputEventFilter(void* msg, long* result) {
 	return false;
 }
 
-ConnexionClient& ConnexionClient::getInstance() {
-	static ConnexionClient sharedInstance;
-	return sharedInstance;
-}
+
 
 ConnexionClient::ConnexionClient() {
 	fLast3dmouseInputTime = 0;
@@ -297,18 +319,10 @@ ConnexionClient::ConnexionClient() {
 
 	gMouseInput = this;
 	QAbstractEventDispatcher::instance()->installNativeEventFilter(this);
-
-    ConnexionData& connexiondata = ConnexionData::getInstance();
-	connexiondata.registerToUserInputMapper(*Application::getUserInputMapper());
-	connexiondata.assignDefaultInputMapping(*Application::getUserInputMapper());
-	UserActivityLogger::getInstance().connectedDevice("controller", "3Dconnexion");
 }
 
 ConnexionClient::~ConnexionClient() {
-	if (gMouseInput == this) {
-        // setting the gMouseInput completely disables the 3Dmouse, needing a restart of windows ...
-		//gMouseInput = 0;
-	}
+    ConnexionClient::destroy();
 }
 
 // Access the mouse parameters structure
@@ -905,11 +919,12 @@ void ConnexionClient::init() {
 
 		// use default switches 
 		ConnexionClientControl(fConnexionClientID, kConnexionCtlSetSwitches, kConnexionSwitchesDisabled, NULL);
-        
-		connexiondata.registerToUserInputMapper(*Application::getUserInputMapper());
-		connexiondata.assignDefaultInputMapping(*Application::getUserInputMapper());
-		UserActivityLogger::getInstance().connectedDevice("controller", "3Dconnexion");
 
+        if (ConnexionClient::Is3dmouseAttached()) {
+		  connexiondata.registerToUserInputMapper(*Application::getUserInputMapper());
+		  connexiondata.assignDefaultInputMapping(*Application::getUserInputMapper());
+		  UserActivityLogger::getInstance().connectedDevice("controller", "3Dconnexion");
+        }
         //let one axis be dominant
         //ConnexionClientControl(fConnexionClientID, kConnexionCtlSetSwitches, kConnexionSwitchDominant | kConnexionSwitchEnableAll, NULL);
 	}
@@ -924,16 +939,35 @@ void ConnexionClient::destroy() {
             UnregisterConnexionClient(fConnexionClientID);
         }
 		CleanupConnexionHandlers();
+        fConnexionClientID = 0;
 	}
 }
 
 void DeviceAddedHandler(unsigned int connection) {
 	qCWarning(interfaceapp) << "3Dconnexion device added ";
+    ConnexionData& connexiondata = ConnexionData::getInstance();
+    connexiondata.registerToUserInputMapper(*Application::getUserInputMapper());
+    connexiondata.assignDefaultInputMapping(*Application::getUserInputMapper());
+    UserActivityLogger::getInstance().connectedDevice("controller", "3Dconnexion");
 }
 
 void DeviceRemovedHandler(unsigned int connection) {
-
+    ConnexionData& connexiondata = ConnexionData::getInstance();
 	qCWarning(interfaceapp) << "3Dconnexion device removed";
+    Application::getUserInputMapper()->removeDevice(connexiondata.getDeviceID());
+    connexiondata.setDeviceID(0);
+}
+
+bool ConnexionClient::Is3dmouseAttached()
+{
+    int result;
+    if (fConnexionClientID) {
+        if (ConnexionControl(kConnexionCtlGetDeviceID, 0, &result)) {
+            return false;
+        }
+        return true;
+    }
+    return false;
 }
 
 void MessageHandler(unsigned int connection, unsigned int messageType, void *messageArgument) {
@@ -945,10 +979,6 @@ void MessageHandler(unsigned int connection, unsigned int messageType, void *mes
 		state = (ConnexionDeviceState*)messageArgument;
 		if (state->client == fConnexionClientID)
 		{
-            // remove unbalaced movement or rotation
-            for (int i = 0; i<6; i = i + 1) {
-                //if (state->axis[i]<2) state->axis[i] = 0;
-            }
             ConnexionData& connexiondata = ConnexionData::getInstance();
 			connexiondata.cc_position = { state->axis[0], state->axis[1], state->axis[2] };
 			connexiondata.cc_rotation = { state->axis[3], state->axis[4], state->axis[5] };
