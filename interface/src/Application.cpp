@@ -642,7 +642,8 @@ Application::Application(int& argc, char** argv, QElapsedTimer &startup_time) :
     auto applicationUpdater = DependencyManager::get<AutoUpdater>();
     connect(applicationUpdater.data(), &AutoUpdater::newVersionIsAvailable, dialogsManager.data(), &DialogsManager::showUpdateDialog);
     applicationUpdater->checkForUpdate();
-    
+
+    // the 3Dconnexion device wants to be initiliazed after a window is displayed.
     ConnexionClient::init();
 }
 
@@ -1520,6 +1521,7 @@ void Application::focusOutEvent(QFocusEvent* event) {
     _keyboardMouseDevice.focusOutEvent(event);
     SixenseManager::getInstance().focusOutEvent();
     SDL2Manager::getInstance()->focusOutEvent();
+    ConnexionData::getInstance().focusOutEvent();
 
     // synthesize events for keys currently pressed, since we may not get their release events
     foreach (int key, _keysPressed) {
