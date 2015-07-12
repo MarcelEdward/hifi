@@ -18,75 +18,13 @@
 
 #include "ui/UserInputMapper.h"
 
-// connnects to the userinputmapper
-class ConnexionData : public QObject {
-    Q_OBJECT
-
-public:
-    static ConnexionData& getInstance();
-    ConnexionData();
-
-    enum PositionChannel {
-        POSITION_AXIS_X_POS = 1,
-        POSITION_AXIS_X_NEG = 2,
-        POSITION_AXIS_Y_POS = 3,
-        POSITION_AXIS_Y_NEG = 4,
-        POSITION_AXIS_Z_POS = 5,
-        POSITION_AXIS_Z_NEG = 6,
-        ROTATION_AXIS_X_POS = 7,
-        ROTATION_AXIS_X_NEG = 8,
-        ROTATION_AXIS_Y_POS = 9,
-        ROTATION_AXIS_Y_NEG = 10,
-        ROTATION_AXIS_Z_POS = 11,
-        ROTATION_AXIS_Z_NEG = 12
-    };
-
-    enum ButtonChannel {
-        BUTTON_1 = 1,
-        BUTTON_2 = 2,
-        BUTTON_3 = 3
-    };
-
-    typedef std::unordered_set<int> ButtonPressedMap;
-    typedef std::map<int, float> AxisStateMap;
-
-    float getButton(int channel) const;
-    float getAxis(int channel) const;
-
-    UserInputMapper::Input makeInput(ConnexionData::PositionChannel axis);
-    UserInputMapper::Input makeInput(ConnexionData::ButtonChannel button);
-
-    void registerToUserInputMapper(UserInputMapper& mapper);
-    void assignDefaultInputMapping(UserInputMapper& mapper);
-
-    void update(float deltaTime);
-    void focusOutEvent();
-
-    int getDeviceID() { return _deviceID; }
-
-    QString _name;
-
-    glm::vec3 cc_position;
-    glm::vec3 cc_rotation;
-    int clientId;
-    int buttonState;
-
-    void setButton(int lastButtonState);
-    void handleAxisEvent();
-    
-protected:
-    int _deviceID = 0;
-
-    ButtonPressedMap _buttonPressedMap;
-    AxisStateMap _axisStateMap;
-};
-
 #ifndef HAVE_CONNEXIONCLIENT
 class ConnexionClient : public QObject {
     Q_OBJECT
 public:
     static void init() {};
     static void destroy() {};
+    static bool Is3dmouseAttached() { return false; };
 };
 #endif // NOT_HAVE_CONNEXIONCLIENT
 
@@ -125,6 +63,8 @@ public:
     void SetNavigationMode(Navigation navigation);
     void SetPivotMode(Pivot pivot);
     void SetPivotVisibility(PivotVisibility visibility);
+
+    static bool Is3dmouseAttached();
 
 private:
     MouseParameters(const MouseParameters&);
@@ -220,7 +160,7 @@ class ConnexionClient : public QObject {
     Q_OBJECT
 public:
     static ConnexionClient& getInstance();
-  //  static ConnexionData connexiondata;
+    static bool Is3dmouseAttached();
     static void init();
     static void destroy();
 };
@@ -228,5 +168,70 @@ public:
 #endif // __APPLE__
 
 #endif // HAVE_CONNEXIONCLIENT
+
+
+// connnects to the userinputmapper
+class ConnexionData : public QObject {
+    Q_OBJECT
+
+public:
+    static ConnexionData& getInstance();
+    ConnexionData();
+
+    enum PositionChannel {
+        POSITION_AXIS_X_POS = 1,
+        POSITION_AXIS_X_NEG = 2,
+        POSITION_AXIS_Y_POS = 3,
+        POSITION_AXIS_Y_NEG = 4,
+        POSITION_AXIS_Z_POS = 5,
+        POSITION_AXIS_Z_NEG = 6,
+        ROTATION_AXIS_X_POS = 7,
+        ROTATION_AXIS_X_NEG = 8,
+        ROTATION_AXIS_Y_POS = 9,
+        ROTATION_AXIS_Y_NEG = 10,
+        ROTATION_AXIS_Z_POS = 11,
+        ROTATION_AXIS_Z_NEG = 12
+    };
+
+    enum ButtonChannel {
+        BUTTON_1 = 1,
+        BUTTON_2 = 2,
+        BUTTON_3 = 3
+    };
+
+    typedef std::unordered_set<int> ButtonPressedMap;
+    typedef std::map<int, float> AxisStateMap;
+
+    float getButton(int channel) const;
+    float getAxis(int channel) const;
+
+    UserInputMapper::Input makeInput(ConnexionData::PositionChannel axis);
+    UserInputMapper::Input makeInput(ConnexionData::ButtonChannel button);
+
+    void registerToUserInputMapper(UserInputMapper& mapper);
+    void assignDefaultInputMapping(UserInputMapper& mapper);
+
+    void update();
+    void focusOutEvent();
+
+    int getDeviceID() { return _deviceID; }
+    void setDeviceID(int deviceID) { _deviceID = deviceID; }
+
+    QString _name;
+
+    glm::vec3 cc_position;
+    glm::vec3 cc_rotation;
+    int clientId;
+    int buttonState;
+
+    void setButton(int lastButtonState);
+    void handleAxisEvent();
+
+protected:
+    int _deviceID = 0;
+
+    ButtonPressedMap _buttonPressedMap;
+    AxisStateMap _axisStateMap;
+};
 
 #endif // defined(hifi_ConnexionClient_h)
