@@ -127,8 +127,8 @@ private:
         TInputData() : fAxes(6) {}
 
         bool IsZero() {
-            return (0. == fAxes[0] && 0. == fAxes[1] && 0. == fAxes[2] &&
-                0. == fAxes[3] && 0. == fAxes[4] && 0. == fAxes[5]);
+            return (0.0f == fAxes[0] && 0.0f == fAxes[1] && 0.0f == fAxes[2] &&
+                0.0f == fAxes[3] && 0.0f == fAxes[4] && 0.0f == fAxes[5]);
         }
 
         int fTimeToLive; // For telling if the device was unplugged while sending data
