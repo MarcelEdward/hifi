@@ -29,26 +29,27 @@ ConnexionData::ConnexionData() {
 
 void ConnexionData::handleAxisEvent() {
     //qCWarning(interfaceapp) << "pos state x = " << cc_position.x << " y = " << cc_position.y << " z = " << cc_position.z << " Rotation x = " << cc_rotation.x << " y = " << cc_rotation.y << " z = " << cc_rotation.z;
-    _axisStateMap[makeInput(POSITION_AXIS_X_POS).getChannel()] = (cc_position.x > 0.0f) ? cc_position.x / MAX_AXIS : 0.0f;
-    _axisStateMap[makeInput(POSITION_AXIS_X_NEG).getChannel()] = (cc_position.x < 0.0f) ? -cc_position.x / MAX_AXIS : 0.0f;
-    _axisStateMap[makeInput(POSITION_AXIS_Y_POS).getChannel()] = (cc_position.y > 0.0f) ? cc_position.y / MAX_AXIS : 0.0f;
-    _axisStateMap[makeInput(POSITION_AXIS_Y_NEG).getChannel()] = (cc_position.y < 0.0f) ? -cc_position.y / MAX_AXIS : 0.0f;
-    _axisStateMap[makeInput(POSITION_AXIS_Z_POS).getChannel()] = (cc_position.z > 0.0f) ? cc_position.z / MAX_AXIS : 0.0f;
-    _axisStateMap[makeInput(POSITION_AXIS_Z_NEG).getChannel()] = (cc_position.z < 0.0f) ? -cc_position.z / MAX_AXIS : 0.0f;
-    _axisStateMap[makeInput(ROTATION_AXIS_X_POS).getChannel()] = (cc_rotation.x > 0.0f) ? cc_rotation.x / MAX_AXIS : 0.0f;
-    _axisStateMap[makeInput(ROTATION_AXIS_X_NEG).getChannel()] = (cc_rotation.x < 0.0f) ? -cc_rotation.x / MAX_AXIS : 0.0f;
-    _axisStateMap[makeInput(ROTATION_AXIS_Y_POS).getChannel()] = (cc_rotation.y > 0.0f) ? cc_rotation.y / MAX_AXIS : 0.0f;
-    _axisStateMap[makeInput(ROTATION_AXIS_Y_NEG).getChannel()] = (cc_rotation.y < 0.0f) ? -cc_rotation.y / MAX_AXIS : 0.0f;
-    _axisStateMap[makeInput(ROTATION_AXIS_Z_POS).getChannel()] = (cc_rotation.z > 0.0f) ? cc_rotation.z / MAX_AXIS : 0.0f;
-    _axisStateMap[makeInput(ROTATION_AXIS_Z_NEG).getChannel()] = (cc_rotation.z < 0.0f) ? -cc_rotation.z / MAX_AXIS : 0.0f;
+    // do a pitch mode when the button pressed = 1
+    if (buttonState == 1) {
+        _axisStateMap[makeInput(ROTATION_AXIS_Y_POS).getChannel()] = (cc_rotation.y > 0.0f) ? cc_rotation.y / MAX_AXIS : 0.0f;
+        _axisStateMap[makeInput(ROTATION_AXIS_Y_NEG).getChannel()] = (cc_rotation.y < 0.0f) ? -cc_rotation.y / MAX_AXIS : 0.0f;
+    } else {
+        _axisStateMap[makeInput(POSITION_AXIS_X_POS).getChannel()] = (cc_position.x > 0.0f) ? cc_position.x / MAX_AXIS : 0.0f;
+        _axisStateMap[makeInput(POSITION_AXIS_X_NEG).getChannel()] = (cc_position.x < 0.0f) ? -cc_position.x / MAX_AXIS : 0.0f;
+        _axisStateMap[makeInput(POSITION_AXIS_Y_POS).getChannel()] = (cc_position.y > 0.0f) ? cc_position.y / MAX_AXIS : 0.0f;
+        _axisStateMap[makeInput(POSITION_AXIS_Y_NEG).getChannel()] = (cc_position.y < 0.0f) ? -cc_position.y / MAX_AXIS : 0.0f;
+        _axisStateMap[makeInput(POSITION_AXIS_Z_POS).getChannel()] = (cc_position.z > 0.0f) ? cc_position.z / MAX_AXIS : 0.0f;
+        _axisStateMap[makeInput(POSITION_AXIS_Z_NEG).getChannel()] = (cc_position.z < 0.0f) ? -cc_position.z / MAX_AXIS : 0.0f;
+        _axisStateMap[makeInput(ROTATION_AXIS_X_POS).getChannel()] = (cc_rotation.x > 0.0f) ? cc_rotation.x / MAX_AXIS : 0.0f;
+        _axisStateMap[makeInput(ROTATION_AXIS_X_NEG).getChannel()] = (cc_rotation.x < 0.0f) ? -cc_rotation.x / MAX_AXIS : 0.0f;
+        _axisStateMap[makeInput(ROTATION_AXIS_Z_POS).getChannel()] = (cc_rotation.z > 0.0f) ? cc_rotation.z / MAX_AXIS : 0.0f;
+        _axisStateMap[makeInput(ROTATION_AXIS_Z_NEG).getChannel()] = (cc_rotation.z < 0.0f) ? -cc_rotation.z / MAX_AXIS : 0.0f;
+    }
 }
 
 void ConnexionData::setButton(int lastButtonState) {
-    if (buttonState == 0) {
-        _buttonPressedMap.erase(lastButtonState);
-    } else {
-        _buttonPressedMap.insert(buttonState);
-    }
+    _buttonPressedMap.clear();
+    _buttonPressedMap.insert(buttonState);
 }
 
 void ConnexionData::registerToUserInputMapper(UserInputMapper& mapper) {
@@ -92,7 +93,7 @@ void ConnexionData::assignDefaultInputMapping(UserInputMapper& mapper) {
     const float JOYSTICK_MOVE_SPEED = 1.0f;
     //const float DPAD_MOVE_SPEED = 0.5f;
     const float JOYSTICK_YAW_SPEED = 0.5f;
-    //const float JOYSTICK_PITCH_SPEED = 0.25f;
+    const float JOYSTICK_PITCH_SPEED = 0.25f;
     const float BOOM_SPEED = 0.1f;
 
     // Y axes are flipped (up is negative)
@@ -107,13 +108,15 @@ void ConnexionData::assignDefaultInputMapping(UserInputMapper& mapper) {
     // Rotation: Camera orientation
     mapper.addInputChannel(UserInputMapper::YAW_RIGHT, makeInput(ROTATION_AXIS_Z_POS), JOYSTICK_YAW_SPEED);
     mapper.addInputChannel(UserInputMapper::YAW_LEFT, makeInput(ROTATION_AXIS_Z_NEG), JOYSTICK_YAW_SPEED);
-    //mapper.addInputChannel(UserInputMapper::PITCH_DOWN, makeInput(ROTATION_AXIS_Y_NEG), JOYSTICK_PITCH_SPEED);
-    //mapper.addInputChannel(UserInputMapper::PITCH_UP, makeInput(ROTATION_AXIS_Y_POS), JOYSTICK_PITCH_SPEED);
+
+    // these only get filled when button 1 is pressed
+    mapper.addInputChannel(UserInputMapper::PITCH_DOWN, makeInput(ROTATION_AXIS_Y_NEG), JOYSTICK_PITCH_SPEED);
+    mapper.addInputChannel(UserInputMapper::PITCH_UP, makeInput(ROTATION_AXIS_Y_POS), JOYSTICK_PITCH_SPEED);
 
     // Button controls
     // Zoom
-    mapper.addInputChannel(UserInputMapper::BOOM_IN, makeInput(BUTTON_1), BOOM_SPEED);
-    mapper.addInputChannel(UserInputMapper::BOOM_OUT, makeInput(BUTTON_2), BOOM_SPEED);
+    mapper.addInputChannel(UserInputMapper::BOOM_IN, makeInput(BUTTON_2), BOOM_SPEED);
+    mapper.addInputChannel(UserInputMapper::BOOM_OUT, makeInput(BUTTON_3), BOOM_SPEED);
 
     // Zoom
     //  mapper.addInputChannel(UserInputMapper::BOOM_IN, makeInput(ROTATION_AXIS_Z_NEG), BOOM_SPEED);
@@ -155,25 +158,49 @@ void ConnexionData::update() {
     // for osx the api will call DeviceAddedHandler or DeviceRemoveHandler when a 3Dconnexion device is attached or detached
 }
 
+ConnexionClient& ConnexionClient::getInstance() {
+    static ConnexionClient sharedInstance;
+    return sharedInstance;
+}
+
 #ifdef HAVE_CONNEXIONCLIENT
 
 #ifdef _WIN32
 
 static ConnexionClient* gMouseInput = 0;
 
-ConnexionClient& ConnexionClient::getInstance() {
-    static ConnexionClient sharedInstance;
-    return sharedInstance;
+void ConnexionClient::toggleConnexion(bool shouldEnable)
+{
+	ConnexionData& connexiondata = ConnexionData::getInstance();
+	if (shouldEnable && connexiondata.getDeviceID() == 0) {
+        ConnexionClient::init();
+    }
+	if (!shouldEnable && connexiondata.getDeviceID() != 0) {
+        ConnexionClient::destroy();
+    }
+
 }
 
 void ConnexionClient::init() {
-    ConnexionClient& cclient = ConnexionClient::getInstance();
-    cclient.client = new ConnexionClient();
+    if (Menu::getInstance()->isOptionChecked(MenuOption::Connexion)) {
+		ConnexionClient& cclient = ConnexionClient::getInstance();
+		cclient.fLast3dmouseInputTime = 0;
+
+		cclient.InitializeRawInput(GetActiveWindow());
+
+		gMouseInput = &cclient;
+
+		QAbstractEventDispatcher::instance()->installNativeEventFilter(&cclient);
+    }
 }
 
 void ConnexionClient::destroy() {
-    ConnexionClient& cclient = ConnexionClient::getInstance();
-    delete cclient.client;
+	ConnexionClient& cclient = ConnexionClient::getInstance();
+	QAbstractEventDispatcher::instance()->removeNativeEventFilter(&cclient);
+	ConnexionData& connexiondata = ConnexionData::getInstance();
+	int deviceid = connexiondata.getDeviceID();
+	connexiondata.setDeviceID(0);
+	Application::getUserInputMapper()->removeDevice(deviceid);
 }
 
 #define LOGITECH_VENDOR_ID 0x46d
@@ -286,8 +313,9 @@ bool ConnexionClient::RawInputEventFilter(void* msg, long* result) {
         connexiondata.assignDefaultInputMapping(*Application::getUserInputMapper());
         UserActivityLogger::getInstance().connectedDevice("controller", "3Dconnexion");
     } else if (!ConnexionClient::Is3dmouseAttached() && connexiondata.getDeviceID() != 0) {
-        Application::getUserInputMapper()->removeDevice(connexiondata.getDeviceID());
-        connexiondata.setDeviceID(0);
+		int deviceid = connexiondata.getDeviceID();
+		connexiondata.setDeviceID(0);
+		Application::getUserInputMapper()->removeDevice(deviceid);
     }
 
     if (!ConnexionClient::Is3dmouseAttached()) {
@@ -308,16 +336,12 @@ bool ConnexionClient::RawInputEventFilter(void* msg, long* result) {
 }
 
 ConnexionClient::ConnexionClient() {
-    fLast3dmouseInputTime = 0;
 
-    InitializeRawInput(GetActiveWindow());
-
-    gMouseInput = this;
-    QAbstractEventDispatcher::instance()->installNativeEventFilter(this);
 }
 
 ConnexionClient::~ConnexionClient() {
-    ConnexionClient::destroy();
+	ConnexionClient& cclient = ConnexionClient::getInstance();
+	QAbstractEventDispatcher::instance()->removeNativeEventFilter(&cclient);
 }
 
 // Access the mouse parameters structure
@@ -335,7 +359,7 @@ void ConnexionClient::Move3d(HANDLE device, std::vector<float>& motionData) {
     Q_UNUSED(device);
     ConnexionData& connexiondata = ConnexionData::getInstance();
     connexiondata.cc_position = { motionData[0] * 1000, motionData[1] * 1000, motionData[2] * 1000 };
-    connexiondata.cc_rotation = { motionData[3] * 1000, motionData[4] * 1000, motionData[5] * 1000 };
+    connexiondata.cc_rotation = { motionData[3] * 1500, motionData[4] * 1500, motionData[5] * 1500 };
     connexiondata.handleAxisEvent();
 }
 
@@ -352,9 +376,9 @@ void ConnexionClient::On3dmouseKeyDown(HANDLE device, int virtualKeyCode) {
 void ConnexionClient::On3dmouseKeyUp(HANDLE device, int virtualKeyCode) {
     Q_UNUSED(device);
     ConnexionData& connexiondata = ConnexionData::getInstance();
-    connexiondata.buttonState = virtualKeyCode;
-    connexiondata.setButton(lastbutton);
-    lastbutton = virtualKeyCode;
+    connexiondata.buttonState = 0;
+    connexiondata.setButton(0);
+    lastbutton = 0;
 }
 
 //Get an initialized array of PRAWINPUTDEVICE for the 3D devices
@@ -773,7 +797,7 @@ bool ConnexionClient::TranslateRawInputData(UINT nInputCode, PRAWINPUT pRawInput
                 if (bIsForeground) {
                     unsigned long dwChange = dwKeystate ^ dwOldKeystate;
 
-                    for (int nKeycode = 1; nKeycode<33; nKeycode++) {
+                    for (int nKeycode = 0; nKeycode<33; nKeycode++) {
                         if (dwChange & 0x01) {
                             int nVirtualKeyCode = HidToVirtualKey(sRidDeviceInfo.hid.dwProductId, nKeycode);
                             if (nVirtualKeyCode) {
@@ -881,14 +905,20 @@ static void DeviceAddedHandler(unsigned int connection);
 static void DeviceRemovedHandler(unsigned int connection);
 static void MessageHandler(unsigned int connection, unsigned int messageType, void *messageArgument);
 
-ConnexionClient& ConnexionClient::getInstance() {
-    static ConnexionClient sharedInstance;
-    return sharedInstance;
+void ConnexionClient::toggleConnexion(bool shouldEnable)
+{
+    if (shouldEnable && !ConnexionClient::Is3dmouseAttached()) {
+        ConnexionClient::init();
+    }
+    if (!shouldEnable && ConnexionClient::Is3dmouseAttached()) {
+        ConnexionClient::destroy();
+    }
+
 }
 
 void ConnexionClient::init() {
     // Make sure the framework is installed
-    if (SetConnexionHandlers != NULL) {
+    if (SetConnexionHandlers != NULL && Menu::getInstance()->isOptionChecked(MenuOption::Connexion)) {
         // Install message handler and register our client
         InstallConnexionHandlers(MessageHandler, DeviceAddedHandler, DeviceRemovedHandler);
         // Either use this to take over in our application only... does not work
@@ -905,7 +935,7 @@ void ConnexionClient::init() {
         // use default switches 
         ConnexionClientControl(fConnexionClientID, kConnexionCtlSetSwitches, kConnexionSwitchesDisabled, NULL);
 
-        if (ConnexionClient::Is3dmouseAttached()) {
+        if (ConnexionClient::Is3dmouseAttached() && connexiondata.getDeviceID() == 0) {
           connexiondata.registerToUserInputMapper(*Application::getUserInputMapper());
           connexiondata.assignDefaultInputMapping(*Application::getUserInputMapper());
           UserActivityLogger::getInstance().connectedDevice("controller", "3Dconnexion");
@@ -924,22 +954,31 @@ void ConnexionClient::destroy() {
         }
         CleanupConnexionHandlers();
         fConnexionClientID = 0;
+        ConnexionData& connexiondata = ConnexionData::getInstance();
+        if (connexiondata.getDeviceID()!=0) {
+            Application::getUserInputMapper()->removeDevice(connexiondata.getDeviceID());
+            connexiondata.setDeviceID(0);
+        }
     }
 }
 
 void DeviceAddedHandler(unsigned int connection) {
-    qCWarning(interfaceapp) << "3Dconnexion device added ";
     ConnexionData& connexiondata = ConnexionData::getInstance();
-    connexiondata.registerToUserInputMapper(*Application::getUserInputMapper());
-    connexiondata.assignDefaultInputMapping(*Application::getUserInputMapper());
-    UserActivityLogger::getInstance().connectedDevice("controller", "3Dconnexion");
+    if (connexiondata.getDeviceID() == 0) {
+        qCWarning(interfaceapp) << "3Dconnexion device added ";
+        connexiondata.registerToUserInputMapper(*Application::getUserInputMapper());
+        connexiondata.assignDefaultInputMapping(*Application::getUserInputMapper());
+        UserActivityLogger::getInstance().connectedDevice("controller", "3Dconnexion");
+    }
 }
 
 void DeviceRemovedHandler(unsigned int connection) {
     ConnexionData& connexiondata = ConnexionData::getInstance();
-    qCWarning(interfaceapp) << "3Dconnexion device removed";
-    Application::getUserInputMapper()->removeDevice(connexiondata.getDeviceID());
-    connexiondata.setDeviceID(0);
+    if (connexiondata.getDeviceID() != 0) {
+        qCWarning(interfaceapp) << "3Dconnexion device removed";
+        Application::getUserInputMapper()->removeDevice(connexiondata.getDeviceID());
+        connexiondata.setDeviceID(0);
+    }
 }
 
 bool ConnexionClient::Is3dmouseAttached() {
