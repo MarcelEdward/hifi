@@ -65,7 +65,6 @@
 #include <DependencyManager.h>
 #include <EntityScriptingInterface.h>
 #include <ErrorDialog.h>
-#include <GlowEffect.h>
 #include <gpu/Batch.h>
 #include <gpu/Context.h>
 #include <gpu/GLBackend.h>
@@ -112,7 +111,6 @@
 
 #include "avatar/AvatarManager.h"
 
-#include "audio/AudioIOStatsRenderer.h"
 #include "audio/AudioScope.h"
 
 #include "devices/DdeFaceTracker.h"
@@ -271,11 +269,9 @@ bool setupEssentials(int& argc, char** argv) {
     auto geometryCache = DependencyManager::set<GeometryCache>();
     auto scriptCache = DependencyManager::set<ScriptCache>();
     auto soundCache = DependencyManager::set<SoundCache>();
-    auto glowEffect = DependencyManager::set<GlowEffect>();
     auto faceshift = DependencyManager::set<Faceshift>();
     auto audio = DependencyManager::set<AudioClient>();
     auto audioScope = DependencyManager::set<AudioScope>();
-    auto audioIOStatsRenderer = DependencyManager::set<AudioIOStatsRenderer>();
     auto deferredLightingEffect = DependencyManager::set<DeferredLightingEffect>();
     auto ambientOcclusionEffect = DependencyManager::set<AmbientOcclusionEffect>();
     auto textureCache = DependencyManager::set<TextureCache>();
@@ -338,7 +334,6 @@ Application::Application(int& argc, char** argv, QElapsedTimer &startup_time) :
         _mousePressed(false),
         _enableProcessOctreeThread(true),
         _octreeProcessor(),
-        _nodeBoundsDisplay(this),
         _runningScriptsWidget(NULL),
         _runningScriptsWidgetWasVisible(false),
         _trayIcon(new QSystemTrayIcon(_window)),
@@ -394,6 +389,11 @@ Application::Application(int& argc, char** argv, QElapsedTimer &startup_time) :
     nodeList->setCustomDeleter([](Dependency* dependency) {
         static_cast<NodeList*>(dependency)->deleteLater();
     });
+
+    // setup a timer for domain-server check ins
+    QTimer* domainCheckInTimer = new QTimer(nodeList.data());
+    connect(domainCheckInTimer, &QTimer::timeout, nodeList.data(), &NodeList::sendDomainServerCheckIn);
+    domainCheckInTimer->start(DOMAIN_SERVER_CHECK_IN_MSECS);
 
     // put the NodeList and datagram processing on the node thread
     nodeList->moveToThread(nodeThread);
@@ -700,6 +700,14 @@ void Application::cleanupBeforeQuit() {
 #endif
 }
 
+void Application::emptyLocalCache() {
+    QNetworkDiskCache* cache = qobject_cast<QNetworkDiskCache*>(NetworkAccessManager::getInstance().cache());
+    if (cache) {
+        qDebug() << "DiskCacheEditor::clear(): Clearing disk cache.";
+        cache->clear();
+    }
+}
+
 Application::~Application() {
     EntityTree* tree = _entities.getTree();
     tree->lockForWrite();
@@ -891,12 +899,6 @@ void Application::paintGL() {
 
     {
         PerformanceTimer perfTimer("renderOverlay");
-        /*
-        gpu::Context context(new gpu::GLBackend());
-        RenderArgs renderArgs(&context, nullptr, getViewFrustum(), lodManager->getOctreeSizeScale(),
-            lodManager->getBoundaryLevelAdjust(), RenderArgs::DEFAULT_RENDER_MODE,
-            RenderArgs::MONO, RenderArgs::RENDER_DEBUG_NONE);
-            */
         _applicationOverlay.renderOverlay(&renderArgs);
     }
 
@@ -972,12 +974,18 @@ void Application::paintGL() {
     } else if (TV3DManager::isConnected()) {
         TV3DManager::display(&renderArgs, _myCamera);
     } else {
-        DependencyManager::get<GlowEffect>()->prepare(&renderArgs);
+        PROFILE_RANGE(__FUNCTION__ "/mainRender");
+
+        auto primaryFBO = DependencyManager::get<TextureCache>()->getPrimaryFramebuffer();
+        GLuint fbo = gpu::GLBackend::getFramebufferID(primaryFBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Viewport is assigned to the size of the framebuffer
         QSize size = DependencyManager::get<TextureCache>()->getFrameBufferSize();
         glViewport(0, 0, size.width(), size.height());
-
+        renderArgs._viewport = glm::ivec4(0, 0, size.width(), size.height());
+        
         glMatrixMode(GL_MODELVIEW);
         glPushMatrix();
         glLoadIdentity();
@@ -986,13 +994,12 @@ void Application::paintGL() {
 
         renderArgs._renderMode = RenderArgs::MIRROR_RENDER_MODE;
         if (Menu::getInstance()->isOptionChecked(MenuOption::Mirror)) {
-            renderRearViewMirror(&renderArgs, _mirrorViewRect);       
+            renderRearViewMirror(&renderArgs, _mirrorViewRect);
         }
 
         renderArgs._renderMode = RenderArgs::NORMAL_RENDER_MODE;
 
-        auto finalFbo = DependencyManager::get<GlowEffect>()->render(&renderArgs);
-
+        auto finalFbo = DependencyManager::get<TextureCache>()->getPrimaryFramebuffer();
 
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, gpu::GLBackend::getFramebufferID(finalFbo));
@@ -1000,12 +1007,15 @@ void Application::paintGL() {
                           0, 0, _glWidget->getDeviceSize().width(), _glWidget->getDeviceSize().height(),
                             GL_COLOR_BUFFER_BIT, GL_LINEAR);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    
+        glBindTexture(GL_TEXTURE_2D, 0); // ???
 
         _compositor.displayOverlayTexture(&renderArgs);
     }
 
 
     if (!OculusManager::isConnected() || OculusManager::allowSwap()) {
+        PROFILE_RANGE(__FUNCTION__ "/bufferSwap");
         _glWidget->swapBuffers();
     }
 
@@ -1018,6 +1028,7 @@ void Application::paintGL() {
 
 void Application::runTests() {
     runTimingTests();
+    runUnitTests();
 }
 
 void Application::audioMuteToggled() {
@@ -1054,6 +1065,7 @@ void Application::resetCameras(Camera& camera, const glm::uvec2& size) {
 }
 
 void Application::resizeGL() {
+    PROFILE_RANGE(__FUNCTION__);
     // Set the desired FBO texture size. If it hasn't changed, this does nothing.
     // Otherwise, it must rebuild the FBOs
     QSize renderSize;
@@ -1186,7 +1198,6 @@ bool Application::event(QEvent* event) {
 }
 
 bool Application::eventFilter(QObject* object, QEvent* event) {
-
     if (event->type() == QEvent::ShortcutOverride) {
         if (DependencyManager::get<OffscreenUi>()->shouldSwallowShortcut(event)) {
             event->accept();
@@ -1530,6 +1541,7 @@ void Application::focusOutEvent(QFocusEvent* event) {
 }
 
 void Application::mouseMoveEvent(QMouseEvent* event, unsigned int deviceID) {
+    PROFILE_RANGE(__FUNCTION__);
     // Used by application overlay to determine how to draw cursor(s)
     _lastMouseMoveWasSimulated = deviceID > 0;
     if (!_lastMouseMoveWasSimulated) {
@@ -1560,7 +1572,9 @@ void Application::mouseMoveEvent(QMouseEvent* event, unsigned int deviceID) {
         return;
     }
 
-    _keyboardMouseDevice.mouseMoveEvent(event, deviceID);
+    if (deviceID == 0) {
+        _keyboardMouseDevice.mouseMoveEvent(event, deviceID);
+    }
 
 }
 
@@ -1581,7 +1595,9 @@ void Application::mousePressEvent(QMouseEvent* event, unsigned int deviceID) {
 
 
     if (activeWindow() == _window) {
-        _keyboardMouseDevice.mousePressEvent(event);
+        if (deviceID == 0) {
+            _keyboardMouseDevice.mousePressEvent(event);
+        }
 
         if (event->button() == Qt::LeftButton) {
             _mouseDragStarted = getTrueMouse();
@@ -1621,7 +1637,9 @@ void Application::mouseReleaseEvent(QMouseEvent* event, unsigned int deviceID) {
     }
 
     if (activeWindow() == _window) {
-        _keyboardMouseDevice.mouseReleaseEvent(event);
+        if (deviceID == 0) {
+            _keyboardMouseDevice.mouseReleaseEvent(event);
+        }
 
         if (event->button() == Qt::LeftButton) {
             _mousePressed = false;
@@ -1785,12 +1803,10 @@ void Application::checkFPS() {
     _frameCount = 0;
     _datagramProcessor->resetCounters();
     _timerStart.start();
-
-    // ask the node list to check in with the domain server
-    DependencyManager::get<NodeList>()->sendDomainServerCheckIn();
 }
 
 void Application::idle() {
+    PROFILE_RANGE(__FUNCTION__);
     static SimpleAverage<float> interIdleDurations;
     static uint64_t lastIdleEnd{ 0 };
 
@@ -1832,6 +1848,7 @@ void Application::idle() {
             PerformanceTimer perfTimer("update");
             PerformanceWarning warn(showWarnings, "Application::idle()... update()");
             const float BIGGEST_DELTA_TIME_SECS = 0.25f;
+            PROFILE_RANGE(__FUNCTION__ "/idleUpdate");
             update(glm::clamp((float)timeSinceLastUpdate / 1000.0f, 0.0f, BIGGEST_DELTA_TIME_SECS));
         }
         {
@@ -1854,8 +1871,8 @@ void Application::idle() {
         }
         // After finishing all of the above work, ensure the idle timer is set to the proper interval,
         // depending on whether we're throttling or not
-        idleTimer->start(_glWidget->isThrottleRendering() ? THROTTLED_IDLE_TIMER_DELAY : 0);
-    } 
+        idleTimer->start(_glWidget->isThrottleRendering() ? THROTTLED_IDLE_TIMER_DELAY : 1);
+    }
 
     // check for any requested background downloads.
     emit checkBackgroundDownloads();
@@ -2226,10 +2243,6 @@ void Application::init() {
     _entityClipboardRenderer.setViewFrustum(getViewFrustum());
     _entityClipboardRenderer.setTree(&_entityClipboard);
 
-    // initialize the GlowEffect with our widget
-    bool glow = Menu::getInstance()->isOptionChecked(MenuOption::EnableGlowEffect);
-    DependencyManager::get<GlowEffect>()->init(glow);
-
     // Make sure any new sounds are loaded as soon as know about them.
     connect(tree, &EntityTree::newCollisionSoundURL, DependencyManager::get<SoundCache>().data(), &SoundCache::getSound);
     connect(_myAvatar, &MyAvatar::newCollisionSoundURL, DependencyManager::get<SoundCache>().data(), &SoundCache::getSound);
@@ -2308,38 +2321,42 @@ void Application::updateMyAvatarLookAtPosition() {
     bool isLookingAtSomeone = false;
     glm::vec3 lookAtSpot;
     if (_myCamera.getMode() == CAMERA_MODE_MIRROR) {
-        //  When I am in mirror mode, just look right at the camera (myself)
+        //  When I am in mirror mode, just look right at the camera (myself); don't switch gaze points because when physically
+        //  looking in a mirror one's eyes appear steady.
         if (!OculusManager::isConnected()) {
             lookAtSpot = _myCamera.getPosition();
         } else {
-            if (_myAvatar->isLookingAtLeftEye()) {
-                lookAtSpot = OculusManager::getLeftEyePosition();
-            } else {
-                lookAtSpot = OculusManager::getRightEyePosition();
-            }
+            lookAtSpot = _myCamera.getPosition() + OculusManager::getMidEyePosition();
         }
-
     } else {
         AvatarSharedPointer lookingAt = _myAvatar->getLookAtTargetAvatar().lock();
         if (lookingAt && _myAvatar != lookingAt.get()) {
-            isLookingAtSomeone = true;
             //  If I am looking at someone else, look directly at one of their eyes
-            if (tracker && !tracker->isMuted()) {
-                //  If a face tracker is active, look at the eye for the side my gaze is biased toward
-                if (tracker->getEstimatedEyeYaw() > _myAvatar->getHead()->getFinalYaw()) {
-                    // Look at their right eye
-                    lookAtSpot = static_cast<Avatar*>(lookingAt.get())->getHead()->getRightEyePosition();
-                } else {
-                    // Look at their left eye
-                    lookAtSpot = static_cast<Avatar*>(lookingAt.get())->getHead()->getLeftEyePosition();
+            isLookingAtSomeone = true;
+            Head* lookingAtHead = static_cast<Avatar*>(lookingAt.get())->getHead();
+
+            const float MAXIMUM_FACE_ANGLE = 65.0f * RADIANS_PER_DEGREE;
+            glm::vec3 lookingAtFaceOrientation = lookingAtHead->getFinalOrientationInWorldFrame() * IDENTITY_FRONT;
+            glm::vec3 fromLookingAtToMe = glm::normalize(_myAvatar->getHead()->getEyePosition()
+                - lookingAtHead->getEyePosition());
+            float faceAngle = glm::angle(lookingAtFaceOrientation, fromLookingAtToMe);
+
+            if (faceAngle < MAXIMUM_FACE_ANGLE) {
+                // Randomly look back and forth between look targets
+                switch (_myAvatar->getEyeContactTarget()) {
+                    case LEFT_EYE:
+                        lookAtSpot = lookingAtHead->getLeftEyePosition();
+                        break;
+                    case RIGHT_EYE:
+                        lookAtSpot = lookingAtHead->getRightEyePosition();
+                        break;
+                    case MOUTH:
+                        lookAtSpot = lookingAtHead->getMouthPosition();
+                        break;
                 }
             } else {
-                //  Need to add randomly looking back and forth between left and right eye for case with no tracker
-                if (_myAvatar->isLookingAtLeftEye()) {
-                    lookAtSpot = static_cast<Avatar*>(lookingAt.get())->getHead()->getLeftEyePosition();
-                } else {
-                    lookAtSpot = static_cast<Avatar*>(lookingAt.get())->getHead()->getRightEyePosition();
-                }
+                // Just look at their head (mid point between eyes)
+                lookAtSpot = lookingAtHead->getEyePosition();
             }
         } else {
             //  I am not looking at anyone else, so just look forward
@@ -2347,14 +2364,13 @@ void Application::updateMyAvatarLookAtPosition() {
                 (_myAvatar->getHead()->getFinalOrientationInWorldFrame() * glm::vec3(0.0f, 0.0f, -TREE_SCALE));
         }
     }
-    //
-    //  Deflect the eyes a bit to match the detected Gaze from 3D camera if active
-    //
-    if (tracker && !tracker->isMuted()) {
+
+    // Deflect the eyes a bit to match the detected gaze from Faceshift if active.
+    // DDE doesn't track eyes.
+    if (tracker && typeid(*tracker) == typeid(Faceshift) && !tracker->isMuted()) {
         float eyePitch = tracker->getEstimatedEyePitch();
         float eyeYaw = tracker->getEstimatedEyeYaw();
         const float GAZE_DEFLECTION_REDUCTION_DURING_EYE_CONTACT = 0.1f;
-        // deflect using Faceshift gaze data
         glm::vec3 origin = _myAvatar->getHead()->getEyePosition();
         float pitchSign = (_myCamera.getMode() == CAMERA_MODE_MIRROR) ? -1.0f : 1.0f;
         float deflection = DependencyManager::get<Faceshift>()->getEyeDeflection();
@@ -2403,6 +2419,15 @@ void Application::cameraMenuChanged() {
             _myCamera.setMode(CAMERA_MODE_INDEPENDENT);
         }
     }
+}
+
+void Application::reloadResourceCaches() {
+    emptyLocalCache();
+    
+    DependencyManager::get<AnimationCache>()->refreshAll();
+    DependencyManager::get<GeometryCache>()->refreshAll();
+    DependencyManager::get<SoundCache>()->refreshAll();
+    DependencyManager::get<TextureCache>()->refreshAll();
 }
 
 void Application::rotationModeChanged() {
@@ -2954,6 +2979,7 @@ QRect Application::getDesirableApplicationGeometry() {
 //                 or the "myCamera".
 //
 void Application::loadViewFrustum(Camera& camera, ViewFrustum& viewFrustum) {
+    PROFILE_RANGE(__FUNCTION__);
     // We will use these below, from either the camera or head vectors calculated above
     viewFrustum.setProjection(camera.getProjection());
 
@@ -3176,9 +3202,6 @@ QImage Application::renderAvatarBillboard(RenderArgs* renderArgs) {
     glClear(GL_COLOR_BUFFER_BIT);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
 
-    // the "glow" here causes an alpha of one
-    Glower glower(renderArgs);
-
     const int BILLBOARD_SIZE = 64;
     // TODO: Pass a RenderArgs to renderAvatarBillboard
     renderRearViewMirror(renderArgs, QRect(0, _glWidget->getDeviceHeight() - BILLBOARD_SIZE,
@@ -3310,7 +3333,7 @@ namespace render {
                         const float APPROXIMATE_DISTANCE_FROM_HORIZON = 0.1f;
                         const float DOUBLE_APPROXIMATE_DISTANCE_FROM_HORIZON = 0.2f;
 
-                        glm::vec3 sunDirection = (args->_viewFrustum->getPosition()/*getAvatarPosition()*/ - closestData.getSunLocation()) 
+                        glm::vec3 sunDirection = (args->_viewFrustum->getPosition()/*getAvatarPosition()*/ - closestData.getSunLocation())
                                                         / closestData.getAtmosphereOuterRadius();
                         float height = glm::distance(args->_viewFrustum->getPosition()/*theCamera.getPosition()*/, closestData.getAtmosphereCenter());
                         if (height < closestData.getAtmosphereInnerRadius()) {
@@ -3318,8 +3341,8 @@ namespace render {
                             alpha = 0.0f;
 
                             if (sunDirection.y > -APPROXIMATE_DISTANCE_FROM_HORIZON) {
-                                float directionY = glm::clamp(sunDirection.y, 
-                                                    -APPROXIMATE_DISTANCE_FROM_HORIZON, APPROXIMATE_DISTANCE_FROM_HORIZON) 
+                                float directionY = glm::clamp(sunDirection.y,
+                                                    -APPROXIMATE_DISTANCE_FROM_HORIZON, APPROXIMATE_DISTANCE_FROM_HORIZON)
                                                     + APPROXIMATE_DISTANCE_FROM_HORIZON;
                                 alpha = (directionY / DOUBLE_APPROXIMATE_DISTANCE_FROM_HORIZON);
                             }
@@ -3330,8 +3353,8 @@ namespace render {
                                 (closestData.getAtmosphereOuterRadius() - closestData.getAtmosphereInnerRadius());
 
                             if (sunDirection.y > -APPROXIMATE_DISTANCE_FROM_HORIZON) {
-                                float directionY = glm::clamp(sunDirection.y, 
-                                                    -APPROXIMATE_DISTANCE_FROM_HORIZON, APPROXIMATE_DISTANCE_FROM_HORIZON) 
+                                float directionY = glm::clamp(sunDirection.y,
+                                                    -APPROXIMATE_DISTANCE_FROM_HORIZON, APPROXIMATE_DISTANCE_FROM_HORIZON)
                                                     + APPROXIMATE_DISTANCE_FROM_HORIZON;
                                 alpha = (directionY / DOUBLE_APPROXIMATE_DISTANCE_FROM_HORIZON);
                             }
@@ -3387,14 +3410,6 @@ void Application::displaySide(RenderArgs* renderArgs, Camera& theCamera, bool se
     // load the view frustum
     loadViewFrustum(theCamera, _displayViewFrustum);
 
-    // flip x if in mirror mode (also requires reversing winding order for backface culling)
-    if (theCamera.getMode() == CAMERA_MODE_MIRROR) {
-        //glScalef(-1.0f, 1.0f, 1.0f);
-        //glFrontFace(GL_CW);
-    } else {
-        glFrontFace(GL_CCW);
-    }
-
     // transform view according to theCamera
     // could be myCamera (if in normal mode)
     // or could be viewFrustumOffsetCamera if in offset mode
@@ -3412,9 +3427,6 @@ void Application::displaySide(RenderArgs* renderArgs, Camera& theCamera, bool se
     Transform viewTransform;
     viewTransform.setTranslation(theCamera.getPosition());
     viewTransform.setRotation(rotation);
-    if (theCamera.getMode() == CAMERA_MODE_MIRROR) {
-//         viewTransform.setScale(Transform::Vec3(-1.0f, 1.0f, 1.0f));
-    }
     if (renderArgs->_renderSide != RenderArgs::MONO) {
         glm::mat4 invView = glm::inverse(_untranslatedViewMatrix);
 
@@ -3469,9 +3481,8 @@ void Application::displaySide(RenderArgs* renderArgs, Camera& theCamera, bool se
    // Assuming nothing get's rendered through that
 
     if (!selfAvatarOnly) {
-
-        // render models...
         if (DependencyManager::get<SceneScriptingInterface>()->shouldRenderEntities()) {
+            // render models...
             PerformanceTimer perfTimer("entities");
             PerformanceWarning warn(Menu::getInstance()->isOptionChecked(MenuOption::PipelineWarnings),
                 "Application::displaySide() ... entities...");
@@ -3479,11 +3490,11 @@ void Application::displaySide(RenderArgs* renderArgs, Camera& theCamera, bool se
             RenderArgs::DebugFlags renderDebugFlags = RenderArgs::RENDER_DEBUG_NONE;
 
             if (Menu::getInstance()->isOptionChecked(MenuOption::PhysicsShowHulls)) {
-                renderDebugFlags = (RenderArgs::DebugFlags) (renderDebugFlags | (int) RenderArgs::RENDER_DEBUG_HULLS);
+                renderDebugFlags = (RenderArgs::DebugFlags) (renderDebugFlags | (int)RenderArgs::RENDER_DEBUG_HULLS);
             }
             if (Menu::getInstance()->isOptionChecked(MenuOption::PhysicsShowOwned)) {
                 renderDebugFlags =
-                    (RenderArgs::DebugFlags) (renderDebugFlags | (int) RenderArgs::RENDER_DEBUG_SIMULATION_OWNERSHIP);
+                    (RenderArgs::DebugFlags) (renderDebugFlags | (int)RenderArgs::RENDER_DEBUG_SIMULATION_OWNERSHIP);
             }
             renderArgs->_debugFlags = renderDebugFlags;
             _entities.render(renderArgs);
@@ -3508,8 +3519,8 @@ void Application::displaySide(RenderArgs* renderArgs, Camera& theCamera, bool se
         pendingChanges.resetItem(WorldBoxRenderData::_item, worldBoxRenderPayload);
     } else {
 
-        pendingChanges.updateItem<WorldBoxRenderData>(WorldBoxRenderData::_item,  
-                [](WorldBoxRenderData& payload) { 
+        pendingChanges.updateItem<WorldBoxRenderData>(WorldBoxRenderData::_item,
+                [](WorldBoxRenderData& payload) {
                     payload._val++;
                 });
     }
@@ -3528,7 +3539,7 @@ void Application::displaySide(RenderArgs* renderArgs, Camera& theCamera, bool se
     }
 
     {
-        PerformanceTimer perfTimer("SceneProcessPendingChanges"); 
+        PerformanceTimer perfTimer("SceneProcessPendingChanges");
         _main3DScene->enqueuePendingChanges(pendingChanges);
 
         _main3DScene->processPendingChangesQueue();
@@ -3551,6 +3562,8 @@ void Application::displaySide(RenderArgs* renderArgs, Camera& theCamera, bool se
         renderContext._maxDrawnOpaqueItems = sceneInterface->getEngineMaxDrawnOpaqueItems();
         renderContext._maxDrawnTransparentItems = sceneInterface->getEngineMaxDrawnTransparentItems();
         renderContext._maxDrawnOverlay3DItems = sceneInterface->getEngineMaxDrawnOverlay3DItems();
+
+        renderContext._drawItemStatus = sceneInterface->doEngineDisplayItemStatus();
 
         renderArgs->_shouldRender = LODManager::shouldRender;
 
@@ -3577,25 +3590,6 @@ void Application::displaySide(RenderArgs* renderArgs, Camera& theCamera, bool se
     }
 
     if (!selfAvatarOnly) {
-        _nodeBoundsDisplay.draw();
-
-        // render octree fades if they exist
-        if (_octreeFades.size() > 0) {
-            PerformanceTimer perfTimer("octreeFades");
-            PerformanceWarning warn(Menu::getInstance()->isOptionChecked(MenuOption::PipelineWarnings),
-                "Application::displaySide() ... octree fades...");
-            _octreeFadesLock.lockForWrite();
-            for(std::vector<OctreeFade>::iterator fade = _octreeFades.begin(); fade != _octreeFades.end();) {
-                fade->render(renderArgs);
-                if(fade->isDone()) {
-                    fade = _octreeFades.erase(fade);
-                } else {
-                    ++fade;
-                }
-            }
-            _octreeFadesLock.unlock();
-        }
-
         // give external parties a change to hook in
         {
             PerformanceTimer perfTimer("inWorldInterface");
@@ -3728,6 +3722,7 @@ void Application::renderRearViewMirror(RenderArgs* renderArgs, const QRect& regi
         QSize size = DependencyManager::get<TextureCache>()->getFrameBufferSize();
         glViewport(region.x(), size.height() - region.y() - region.height(), region.width(), region.height());
         glScissor(region.x(), size.height() - region.y() - region.height(), region.width(), region.height());
+        renderArgs->_viewport = glm::ivec4(region.x(), size.height() - region.y() - region.height(), region.width(), region.height());
     } else {
         // if not rendering the billboard, the region is in device independent coordinates; must convert to device
         QSize size = DependencyManager::get<TextureCache>()->getFrameBufferSize();
@@ -3735,6 +3730,8 @@ void Application::renderRearViewMirror(RenderArgs* renderArgs, const QRect& regi
         int x = region.x() * ratio, y = region.y() * ratio, width = region.width() * ratio, height = region.height() * ratio;
         glViewport(x, size.height() - y - height, width, height);
         glScissor(x, size.height() - y - height, width, height);
+    
+        renderArgs->_viewport = glm::ivec4(x, size.height() - y - height, width, height);
     }
     bool updateViewFrustum = false;
     updateProjectionMatrix(_mirrorCamera, updateViewFrustum);
@@ -3747,6 +3744,7 @@ void Application::renderRearViewMirror(RenderArgs* renderArgs, const QRect& regi
     glPopMatrix();
 
     // reset Viewport and projection matrix
+    renderArgs->_viewport = glm::ivec4(viewport[0], viewport[1], viewport[2], viewport[3]);
     glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
     glDisable(GL_SCISSOR_TEST);
     updateProjectionMatrix(_myCamera, updateViewFrustum);
@@ -3887,17 +3885,6 @@ void Application::nodeKilled(SharedNodePointer node) {
             qCDebug(interfaceapp, "model server going away...... v[%f, %f, %f, %f]",
                     (double)rootDetails.x, (double)rootDetails.y, (double)rootDetails.z, (double)rootDetails.s);
 
-            // Add the jurisditionDetails object to the list of "fade outs"
-            if (!Menu::getInstance()->isOptionChecked(MenuOption::DontFadeOnOctreeServerChanges)) {
-                OctreeFade fade(OctreeFade::FADE_OUT, NODE_KILLED_RED, NODE_KILLED_GREEN, NODE_KILLED_BLUE);
-                fade.voxelDetails = rootDetails;
-                const float slightly_smaller = 0.99f;
-                fade.voxelDetails.s = fade.voxelDetails.s * slightly_smaller;
-                _octreeFadesLock.lockForWrite();
-                _octreeFades.push_back(fade);
-                _octreeFadesLock.unlock();
-            }
-
             // If the model server is going away, remove it from our jurisdiction map so we don't send voxels to a dead server
             _entityServerJurisdictions.lockForWrite();
             _entityServerJurisdictions.erase(_entityServerJurisdictions.find(nodeUUID));
@@ -3974,16 +3961,6 @@ int Application::parseOctreeStats(const QByteArray& packet, const SharedNodePoin
                     qPrintable(serverType),
                     (double)rootDetails.x, (double)rootDetails.y, (double)rootDetails.z, (double)rootDetails.s);
 
-            // Add the jurisditionDetails object to the list of "fade outs"
-            if (!Menu::getInstance()->isOptionChecked(MenuOption::DontFadeOnOctreeServerChanges)) {
-                OctreeFade fade(OctreeFade::FADE_OUT, NODE_ADDED_RED, NODE_ADDED_GREEN, NODE_ADDED_BLUE);
-                fade.voxelDetails = rootDetails;
-                const float slightly_smaller = 0.99f;
-                fade.voxelDetails.s = fade.voxelDetails.s * slightly_smaller;
-                _octreeFadesLock.lockForWrite();
-                _octreeFades.push_back(fade);
-                _octreeFadesLock.unlock();
-            }
         } else {
             jurisdiction->unlock();
         }
@@ -4835,7 +4812,7 @@ qreal Application::getDevicePixelRatio() {
 mat4 Application::getEyeProjection(int eye) const {
     if (isHMDMode()) {
         return OculusManager::getEyeProjection(eye);
-    } 
+    }
       
     return _viewFrustum.getProjection();
 }

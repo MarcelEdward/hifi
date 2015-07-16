@@ -27,7 +27,6 @@
 #include <PerfStat.h>
 
 #include "AudioClient.h"
-#include "audio/AudioIOStatsRenderer.h"
 #include "audio/AudioScope.h"
 #include "Application.h"
 #include "ApplicationOverlay.h"
@@ -74,6 +73,7 @@ ApplicationOverlay::~ApplicationOverlay() {
 
 // Renders the overlays either to a texture or to the screen
 void ApplicationOverlay::renderOverlay(RenderArgs* renderArgs) {
+    PROFILE_RANGE(__FUNCTION__);
     CHECK_GL_ERROR();
     PerformanceWarning warn(Menu::getInstance()->isOptionChecked(MenuOption::PipelineWarnings), "ApplicationOverlay::displayOverlay()");
 
@@ -98,6 +98,7 @@ void ApplicationOverlay::renderOverlay(RenderArgs* renderArgs) {
 }
 
 void ApplicationOverlay::renderQmlUi(RenderArgs* renderArgs) {
+    PROFILE_RANGE(__FUNCTION__);
     if (_uiTexture) {
         gpu::Batch batch;
         auto geometryCache = DependencyManager::get<GeometryCache>();
@@ -112,6 +113,7 @@ void ApplicationOverlay::renderQmlUi(RenderArgs* renderArgs) {
 }
 
 void ApplicationOverlay::renderOverlays(RenderArgs* renderArgs) {
+    PROFILE_RANGE(__FUNCTION__);
     glm::vec2 size = qApp->getCanvasSize();
 
     mat4 legacyProjection = glm::ortho<float>(0, size.x, size.y, 0, ORTHO_NEAR_CLIP, ORTHO_FAR_CLIP);
@@ -124,16 +126,18 @@ void ApplicationOverlay::renderOverlays(RenderArgs* renderArgs) {
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glUseProgram(0);
 
     // give external parties a change to hook in
     emit qApp->renderingOverlay();
     qApp->getOverlays().renderHUD(renderArgs);
 
+    DependencyManager::get<AudioScope>()->render(renderArgs, _overlayFramebuffer->size().width(), _overlayFramebuffer->size().height());
+
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
 
-    renderArgs->_context->syncCache();
     fboViewport(_overlayFramebuffer);
 }
 
@@ -160,19 +164,6 @@ void ApplicationOverlay::renderStatsAndLogs(RenderArgs* renderArgs) {
         drawText(canvasSize.x - 100, canvasSize.y - timerBottom,
             0.30f, 0.0f, 0, frameTimer.toUtf8().constData(), WHITE_TEXT);
     }
-
-    glPointSize(1.0f);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_LIGHTING);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    NodeBounds& nodeBoundsDisplay = qApp->getNodeBoundsDisplay();
-    nodeBoundsDisplay.drawOverlay();
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_LIGHTING);
-    glEnable(GL_BLEND);
-    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_CONSTANT_ALPHA, GL_ONE);
-    fboViewport(_overlayFramebuffer);
     */
 }
 
@@ -196,7 +187,7 @@ void ApplicationOverlay::renderDomainConnectionStatusBorder(RenderArgs* renderAr
         geometryCache->useSimpleDrawPipeline(batch);
         batch.setProjectionTransform(mat4());
         batch.setModelTransform(mat4());
-        batch.setUniformTexture(0, DependencyManager::get<TextureCache>()->getWhiteTexture());
+        batch.setResourceTexture(0, DependencyManager::get<TextureCache>()->getWhiteTexture());
         batch._glLineWidth(CONNECTION_STATUS_BORDER_LINE_WIDTH);
 
         // TODO animate the disconnect border for some excitement while not connected?
@@ -219,6 +210,7 @@ GLuint ApplicationOverlay::getOverlayTexture() {
 }
 
 void ApplicationOverlay::buildFramebufferObject() {
+    PROFILE_RANGE(__FUNCTION__);
     QSize fboSize = qApp->getDeviceSize();
     if (_overlayFramebuffer && fboSize == _overlayFramebuffer->size()) {
         // Already built

@@ -32,6 +32,7 @@ EntityTree::EntityTree(bool shouldReaverage) :
     _simulation(NULL)
 {
     _rootElement = createNewElement();
+    resetClientEditStats();
 }
 
 EntityTree::~EntityTree() {
@@ -58,6 +59,8 @@ void EntityTree::eraseAllOctreeElements(bool createNewRoot) {
     }
     _entityToElementMap.clear();
     Octree::eraseAllOctreeElements(createNewRoot);
+    
+    resetClientEditStats();
 }
 
 bool EntityTree::handlesEditPacketType(PacketType packetType) const {
@@ -89,13 +92,11 @@ void EntityTree::postAddEntity(EntityItemPointer entity) {
 bool EntityTree::updateEntity(const EntityItemID& entityID, const EntityItemProperties& properties, const SharedNodePointer& senderNode) {
     EntityTreeElement* containingElement = getContainingElement(entityID);
     if (!containingElement) {
-        qCDebug(entities) << "UNEXPECTED!!!!  EntityTree::updateEntity() entityID doesn't exist!!! entityID=" << entityID;
         return false;
     }
 
     EntityItemPointer existingEntity = containingElement->getEntityWithEntityItemID(entityID);
     if (!existingEntity) {
-        qCDebug(entities) << "UNEXPECTED!!!! don't call updateEntity() on entity items that don't exist. entityID=" << entityID;
         return false;
     }
 
@@ -105,8 +106,6 @@ bool EntityTree::updateEntity(const EntityItemID& entityID, const EntityItemProp
 bool EntityTree::updateEntity(EntityItemPointer entity, const EntityItemProperties& properties, const SharedNodePointer& senderNode) {
     EntityTreeElement* containingElement = getContainingElement(entity->getEntityItemID());
     if (!containingElement) {
-        qCDebug(entities) << "UNEXPECTED!!!!  EntityTree::updateEntity() entity-->element lookup failed!!! entityID=" 
-            << entity->getEntityItemID();
         return false;
     }
     return updateEntityWithElement(entity, properties, containingElement, senderNode);
@@ -1119,4 +1118,30 @@ bool EntityTree::readFromMap(QVariantMap& map) {
     }
 
     return true;
+}
+
+void EntityTree::resetClientEditStats() {
+    _treeResetTime = usecTimestampNow();
+    _maxEditDelta = 0;
+    _totalEditDeltas = 0;
+    _totalTrackedEdits = 0;
+}
+
+
+
+void EntityTree::trackIncomingEntityLastEdited(quint64 lastEditedTime, int bytesRead) {
+    // we don't want to track all edit deltas, just those edits that have happend
+    // since we connected to this domain. This will filter out all previously created
+    // content and only track new edits
+    if (lastEditedTime > _treeResetTime) {
+        quint64 now = usecTimestampNow();
+        quint64 sinceEdit = now - lastEditedTime;
+
+        _totalEditDeltas += sinceEdit;
+        _totalEditBytes += bytesRead;
+        _totalTrackedEdits++;
+        if (sinceEdit > _maxEditDelta) {
+            _maxEditDelta = sinceEdit;
+        }
+    }
 }
