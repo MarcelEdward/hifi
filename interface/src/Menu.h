@@ -161,7 +161,6 @@ namespace MenuOption {
     const QString CenterPlayerInView = "Center Player In View";
     const QString Chat = "Chat...";
     const QString Collisions = "Collisions";
-    const QString Connexion = "3Dconnexion device";
     const QString Console = "Console...";
     const QString ControlWithSpeech = "Control With Speech";
     const QString CopyAddress = "Copy Address to Clipboard";
