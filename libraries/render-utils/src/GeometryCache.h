@@ -133,8 +133,6 @@ public:
     int allocateID() { return _nextID++; }
     static const int UNKNOWN_ID;
 
-    void renderCone(float base, float height, int slices, int stacks);
-
     void renderSphere(float radius, int slices, int stacks, const glm::vec3& color, bool solid = true, int id = UNKNOWN_ID)
                 { renderSphere(radius, slices, stacks, glm::vec4(color, 1.0f), solid, id); }
     void renderSphere(gpu::Batch& batch, float radius, int slices, int stacks, const glm::vec3& color, bool solid = true, int id = UNKNOWN_ID) 
@@ -301,6 +299,7 @@ private:
     };
     
     QHash<IntPair, VerticesIndices> _coneVBOs;
+
     int _nextID;
 
     QHash<int, Vec3PairVec4Pair> _lastRegisteredQuad3DTexture;
