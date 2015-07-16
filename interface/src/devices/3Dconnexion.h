@@ -22,9 +22,12 @@
 class ConnexionClient : public QObject {
     Q_OBJECT
 public:
+    static ConnexionClient& getInstance();
     static void init() {};
     static void destroy() {};
     static bool Is3dmouseAttached() { return false; };
+public slots:
+    void toggleConnexion(bool shouldEnable) {};
 };
 #endif // NOT_HAVE_CONNEXIONCLIENT
 
@@ -107,6 +110,9 @@ public:
         return ConnexionClient::RawInputEventFilter(message,  result);
     }
 
+public slots:
+    void toggleConnexion(bool shouldEnable);
+
 signals:
     void Move3d(std::vector<float>& motionData);
     void On3dmouseKeyDown(int virtualKeyCode);
@@ -163,6 +169,8 @@ public:
     static bool Is3dmouseAttached();
     static void init();
     static void destroy();
+public slots:
+    void toggleConnexion(bool shouldEnable);
 };
 
 #endif // __APPLE__
