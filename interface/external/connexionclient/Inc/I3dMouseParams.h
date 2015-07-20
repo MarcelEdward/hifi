@@ -29,7 +29,7 @@ public:
 
     virtual void SetPanZoom(bool isPanZoom) = 0;
     virtual void SetRotate(bool isRotate) = 0;
-    virtual void SetSpeed(ESpeed speed) = 0;
+    virtual void SetSpeed(Speed speed) = 0;
 
 protected:
     virtual ~I3dMouseSensor() {}

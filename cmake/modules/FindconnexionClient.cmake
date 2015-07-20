@@ -18,7 +18,7 @@ hifi_library_search_hints("connexionclient")
 
 if (APPLE)
 	find_library(3DconnexionClient 3DconnexionClient)
-	if(3DconnexionClient)
+	if(EXISTS ${3DconnexionClient})
 		set(CONNEXIONCLIENT_FOUND true)
 		set(CONNEXIONCLIENT_INCLUDE_DIR ${3DconnexionClient})
 		set(CONNEXIONCLIENT_LIBRARY ${3DconnexionClient})
