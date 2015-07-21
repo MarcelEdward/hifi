@@ -28,23 +28,19 @@ ConnexionData::ConnexionData() {
 }
 
 void ConnexionData::handleAxisEvent() {
-    //qCWarning(interfaceapp) << "pos state x = " << cc_position.x << " y = " << cc_position.y << " z = " << cc_position.z << " Rotation x = " << cc_rotation.x << " y = " << cc_rotation.y << " z = " << cc_rotation.z;
-    // do a pitch mode when the button pressed = 1
-    if (buttonState == 1) {
-        _axisStateMap[makeInput(ROTATION_AXIS_Y_POS).getChannel()] = (cc_rotation.y > 0.0f) ? cc_rotation.y / MAX_AXIS : 0.0f;
-        _axisStateMap[makeInput(ROTATION_AXIS_Y_NEG).getChannel()] = (cc_rotation.y < 0.0f) ? -cc_rotation.y / MAX_AXIS : 0.0f;
-    } else {
-        _axisStateMap[makeInput(POSITION_AXIS_X_POS).getChannel()] = (cc_position.x > 0.0f) ? cc_position.x / MAX_AXIS : 0.0f;
-        _axisStateMap[makeInput(POSITION_AXIS_X_NEG).getChannel()] = (cc_position.x < 0.0f) ? -cc_position.x / MAX_AXIS : 0.0f;
-        _axisStateMap[makeInput(POSITION_AXIS_Y_POS).getChannel()] = (cc_position.y > 0.0f) ? cc_position.y / MAX_AXIS : 0.0f;
-        _axisStateMap[makeInput(POSITION_AXIS_Y_NEG).getChannel()] = (cc_position.y < 0.0f) ? -cc_position.y / MAX_AXIS : 0.0f;
-        _axisStateMap[makeInput(POSITION_AXIS_Z_POS).getChannel()] = (cc_position.z > 0.0f) ? cc_position.z / MAX_AXIS : 0.0f;
-        _axisStateMap[makeInput(POSITION_AXIS_Z_NEG).getChannel()] = (cc_position.z < 0.0f) ? -cc_position.z / MAX_AXIS : 0.0f;
-        _axisStateMap[makeInput(ROTATION_AXIS_X_POS).getChannel()] = (cc_rotation.x > 0.0f) ? cc_rotation.x / MAX_AXIS : 0.0f;
-        _axisStateMap[makeInput(ROTATION_AXIS_X_NEG).getChannel()] = (cc_rotation.x < 0.0f) ? -cc_rotation.x / MAX_AXIS : 0.0f;
-        _axisStateMap[makeInput(ROTATION_AXIS_Z_POS).getChannel()] = (cc_rotation.z > 0.0f) ? cc_rotation.z / MAX_AXIS : 0.0f;
-        _axisStateMap[makeInput(ROTATION_AXIS_Z_NEG).getChannel()] = (cc_rotation.z < 0.0f) ? -cc_rotation.z / MAX_AXIS : 0.0f;
-    }
+    qCWarning(interfaceapp) << "pos state x = " << cc_position.x << " y = " << cc_position.y << " z = " << cc_position.z << " Rotation x = " << cc_rotation.x << " y = " << cc_rotation.y << " z = " << cc_rotation.z;
+    _axisStateMap[makeInput(ROTATION_AXIS_Y_POS).getChannel()] = (cc_rotation.y > 0.0f) ? cc_rotation.y / MAX_AXIS : 0.0f;
+    _axisStateMap[makeInput(ROTATION_AXIS_Y_NEG).getChannel()] = (cc_rotation.y < 0.0f) ? -cc_rotation.y / MAX_AXIS : 0.0f;
+    _axisStateMap[makeInput(POSITION_AXIS_X_POS).getChannel()] = (cc_position.x > 0.0f) ? cc_position.x / MAX_AXIS : 0.0f;
+    _axisStateMap[makeInput(POSITION_AXIS_X_NEG).getChannel()] = (cc_position.x < 0.0f) ? -cc_position.x / MAX_AXIS : 0.0f;
+    _axisStateMap[makeInput(POSITION_AXIS_Y_POS).getChannel()] = (cc_position.y > 0.0f) ? cc_position.y / MAX_AXIS : 0.0f;
+    _axisStateMap[makeInput(POSITION_AXIS_Y_NEG).getChannel()] = (cc_position.y < 0.0f) ? -cc_position.y / MAX_AXIS : 0.0f;
+    _axisStateMap[makeInput(POSITION_AXIS_Z_POS).getChannel()] = (cc_position.z > 0.0f) ? cc_position.z / MAX_AXIS : 0.0f;
+    _axisStateMap[makeInput(POSITION_AXIS_Z_NEG).getChannel()] = (cc_position.z < 0.0f) ? -cc_position.z / MAX_AXIS : 0.0f;
+    _axisStateMap[makeInput(ROTATION_AXIS_X_POS).getChannel()] = (cc_rotation.x > 0.0f) ? cc_rotation.x / MAX_AXIS : 0.0f;
+    _axisStateMap[makeInput(ROTATION_AXIS_X_NEG).getChannel()] = (cc_rotation.x < 0.0f) ? -cc_rotation.x / MAX_AXIS : 0.0f;
+    _axisStateMap[makeInput(ROTATION_AXIS_Z_POS).getChannel()] = (cc_rotation.z > 0.0f) ? cc_rotation.z / MAX_AXIS : 0.0f;
+    _axisStateMap[makeInput(ROTATION_AXIS_Z_NEG).getChannel()] = (cc_rotation.z < 0.0f) ? -cc_rotation.z / MAX_AXIS : 0.0f;
 }
 
 void ConnexionData::setButton(int lastButtonState) {
@@ -105,13 +101,11 @@ void ConnexionData::assignDefaultInputMapping(UserInputMapper& mapper) {
     mapper.addInputChannel(UserInputMapper::VERTICAL_UP, makeInput(POSITION_AXIS_Z_NEG), JOYSTICK_MOVE_SPEED);
     mapper.addInputChannel(UserInputMapper::VERTICAL_DOWN, makeInput(POSITION_AXIS_Z_POS), JOYSTICK_MOVE_SPEED);
 
-    // Rotation: Camera orientation
-    mapper.addInputChannel(UserInputMapper::YAW_RIGHT, makeInput(ROTATION_AXIS_Z_POS), JOYSTICK_YAW_SPEED);
-    mapper.addInputChannel(UserInputMapper::YAW_LEFT, makeInput(ROTATION_AXIS_Z_NEG), JOYSTICK_YAW_SPEED);
-
-    // these only get filled when button 1 is pressed
-    mapper.addInputChannel(UserInputMapper::PITCH_DOWN, makeInput(ROTATION_AXIS_Y_NEG), JOYSTICK_PITCH_SPEED);
-    mapper.addInputChannel(UserInputMapper::PITCH_UP, makeInput(ROTATION_AXIS_Y_POS), JOYSTICK_PITCH_SPEED);
+    // Rotation: Camera orientation with button 1
+    mapper.addInputChannel(UserInputMapper::YAW_RIGHT, makeInput(ROTATION_AXIS_Z_POS), makeInput(BUTTON_1), JOYSTICK_YAW_SPEED);
+    mapper.addInputChannel(UserInputMapper::YAW_LEFT, makeInput(ROTATION_AXIS_Z_NEG), makeInput(BUTTON_1), JOYSTICK_YAW_SPEED);
+    mapper.addInputChannel(UserInputMapper::PITCH_DOWN, makeInput(ROTATION_AXIS_Y_NEG),makeInput(BUTTON_1),  JOYSTICK_PITCH_SPEED);
+    mapper.addInputChannel(UserInputMapper::PITCH_UP, makeInput(ROTATION_AXIS_Y_POS),makeInput(BUTTON_1),  JOYSTICK_PITCH_SPEED);
 
     // Button controls
     // Zoom
