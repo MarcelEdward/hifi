@@ -28,7 +28,7 @@ ConnexionData::ConnexionData() {
 }
 
 void ConnexionData::handleAxisEvent() {
-    qCWarning(interfaceapp) << "pos state x = " << cc_position.x << " y = " << cc_position.y << " z = " << cc_position.z << " Rotation x = " << cc_rotation.x << " y = " << cc_rotation.y << " z = " << cc_rotation.z;
+    //qCWarning(interfaceapp) << "pos state x = " << cc_position.x << " y = " << cc_position.y << " z = " << cc_position.z << " Rotation x = " << cc_rotation.x << " y = " << cc_rotation.y << " z = " << cc_rotation.z;
     _axisStateMap[makeInput(ROTATION_AXIS_Y_POS).getChannel()] = (cc_rotation.y > 0.0f) ? cc_rotation.y / MAX_AXIS : 0.0f;
     _axisStateMap[makeInput(ROTATION_AXIS_Y_NEG).getChannel()] = (cc_rotation.y < 0.0f) ? -cc_rotation.y / MAX_AXIS : 0.0f;
     _axisStateMap[makeInput(POSITION_AXIS_X_POS).getChannel()] = (cc_position.x > 0.0f) ? cc_position.x / MAX_AXIS : 0.0f;
@@ -45,7 +45,7 @@ void ConnexionData::handleAxisEvent() {
 
 void ConnexionData::setButton(int lastButtonState) {
     _buttonPressedMap.clear();
-    _buttonPressedMap.insert(buttonState);
+    _buttonPressedMap.insert(lastButtonState);
 }
 
 void ConnexionData::registerToUserInputMapper(UserInputMapper& mapper) {
@@ -102,15 +102,15 @@ void ConnexionData::assignDefaultInputMapping(UserInputMapper& mapper) {
     mapper.addInputChannel(UserInputMapper::VERTICAL_DOWN, makeInput(POSITION_AXIS_Z_POS), JOYSTICK_MOVE_SPEED);
 
     // Rotation: Camera orientation with button 1
-    mapper.addInputChannel(UserInputMapper::YAW_RIGHT, makeInput(ROTATION_AXIS_Z_POS), makeInput(BUTTON_1), JOYSTICK_YAW_SPEED);
-    mapper.addInputChannel(UserInputMapper::YAW_LEFT, makeInput(ROTATION_AXIS_Z_NEG), makeInput(BUTTON_1), JOYSTICK_YAW_SPEED);
-    mapper.addInputChannel(UserInputMapper::PITCH_DOWN, makeInput(ROTATION_AXIS_Y_NEG),makeInput(BUTTON_1),  JOYSTICK_PITCH_SPEED);
-    mapper.addInputChannel(UserInputMapper::PITCH_UP, makeInput(ROTATION_AXIS_Y_POS),makeInput(BUTTON_1),  JOYSTICK_PITCH_SPEED);
+    mapper.addInputChannel(UserInputMapper::YAW_RIGHT, makeInput(ROTATION_AXIS_Z_POS), JOYSTICK_YAW_SPEED);
+    mapper.addInputChannel(UserInputMapper::YAW_LEFT, makeInput(ROTATION_AXIS_Z_NEG), JOYSTICK_YAW_SPEED);
+    mapper.addInputChannel(UserInputMapper::PITCH_DOWN, makeInput(ROTATION_AXIS_Y_NEG), JOYSTICK_PITCH_SPEED);
+    mapper.addInputChannel(UserInputMapper::PITCH_UP, makeInput(ROTATION_AXIS_Y_POS), JOYSTICK_PITCH_SPEED);
 
     // Button controls
     // Zoom
-    mapper.addInputChannel(UserInputMapper::BOOM_IN, makeInput(BUTTON_2), BOOM_SPEED);
-    mapper.addInputChannel(UserInputMapper::BOOM_OUT, makeInput(BUTTON_3), BOOM_SPEED);
+    mapper.addInputChannel(UserInputMapper::BOOM_IN, makeInput(BUTTON_1), BOOM_SPEED);
+    mapper.addInputChannel(UserInputMapper::BOOM_OUT, makeInput(BUTTON_2), BOOM_SPEED);
 
     // Zoom
     //  mapper.addInputChannel(UserInputMapper::BOOM_IN, makeInput(ROTATION_AXIS_Z_NEG), BOOM_SPEED);
@@ -214,8 +214,6 @@ typedef unsigned __int64 QWORD;
 static const double k3dmouseAngularVelocity = 8.0e-6; // radians per second per count
 
 static const int kTimeToLive = 5;
-
-int lastbutton = 0;
 
 enum ConnexionPid {
     CONNEXIONPID_SPACEPILOT = 0xc625,
@@ -361,18 +359,14 @@ void ConnexionClient::Move3d(HANDLE device, std::vector<float>& motionData) {
 void ConnexionClient::On3dmouseKeyDown(HANDLE device, int virtualKeyCode) {
     Q_UNUSED(device);
     ConnexionData& connexiondata = ConnexionData::getInstance();
-    connexiondata.buttonState = virtualKeyCode;
-    connexiondata.setButton(lastbutton);
-    lastbutton = virtualKeyCode;
+    connexiondata.setButton(virtualKeyCode);
 }
 
 //Called when a 3D mouse key is released
 void ConnexionClient::On3dmouseKeyUp(HANDLE device, int virtualKeyCode) {
     Q_UNUSED(device);
     ConnexionData& connexiondata = ConnexionData::getInstance();
-    connexiondata.buttonState = 0;
     connexiondata.setButton(0);
-    lastbutton = 0;
 }
 
 //Get an initialized array of PRAWINPUTDEVICE for the 3D devices
@@ -791,7 +785,7 @@ bool ConnexionClient::TranslateRawInputData(UINT nInputCode, PRAWINPUT pRawInput
                 if (bIsForeground) {
                     unsigned long dwChange = dwKeystate ^ dwOldKeystate;
 
-                    for (int nKeycode = 0; nKeycode<33; nKeycode++) {
+                    for (int nKeycode = 1; nKeycode<33; nKeycode++) {
                         if (dwChange & 0x01) {
                             int nVirtualKeyCode = HidToVirtualKey(sRidDeviceInfo.hid.dwProductId, nKeycode);
                             if (nVirtualKeyCode) {
@@ -999,8 +993,7 @@ void MessageHandler(unsigned int connection, unsigned int messageType, void *mes
 
             connexiondata.handleAxisEvent();
             if (state->buttons != lastState.buttons) {
-                connexiondata.buttonState = state->buttons;
-                connexiondata.setButton(lastState.buttons);
+                connexiondata.setButton(state->buttons);
             }
             memmove(&lastState, state, (long)sizeof(ConnexionDeviceState));
         }
