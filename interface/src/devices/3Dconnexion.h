@@ -230,6 +230,7 @@ public:
     glm::vec3 cc_position;
     glm::vec3 cc_rotation;
     int clientId;
+    int buttonState;
 
     void setButton(int lastButtonState);
     void handleAxisEvent();
