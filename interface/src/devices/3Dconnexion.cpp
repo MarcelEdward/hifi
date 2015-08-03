@@ -333,7 +333,9 @@ ConnexionClient::ConnexionClient() {
 
 ConnexionClient::~ConnexionClient() {
     ConnexionClient& cclient = ConnexionClient::getInstance();
-    QAbstractEventDispatcher::instance()->removeNativeEventFilter(&cclient);
+    if (Menu::getInstance()->isOptionChecked(MenuOption::Connexion)) {
+        QAbstractEventDispatcher::instance()->removeNativeEventFilter(&cclient);
+    }
 }
 
 // Access the mouse parameters structure
