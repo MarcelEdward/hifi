@@ -364,22 +364,25 @@ void Resource::maybeRefresh() {
         QNetworkReply* reply = qobject_cast<QNetworkReply*>(sender());
         QVariant variant = reply->header(QNetworkRequest::LastModifiedHeader);
         QNetworkCacheMetaData metaData = NetworkAccessManager::getInstance().cache()->metaData(_url);
-        if (variant.isValid() && variant.canConvert<QDateTime>() && metaData.isValid()) {
-            QDateTime lastModified = variant.value<QDateTime>();
-            QDateTime lastModifiedOld = metaData.lastModified();
-            if (lastModified.isValid() && lastModifiedOld.isValid() &&
-                lastModifiedOld >= lastModified) { // With >=, cache won't thrash in eventually-consistent cdn.
-                qCDebug(networking) << "Using cached version of" << _url.fileName();
-                // We don't need to update, return
-                return;
+
+        QUrl url(reply->url().toString());
+        // check if the reply is the same url as the file from the cache
+        if (_url.fileName() == url.fileName()) {
+            if (variant.isValid() && variant.canConvert<QDateTime>() && metaData.isValid()) {
+                QDateTime lastModified = variant.value<QDateTime>();
+                QDateTime lastModifiedOld = metaData.lastModified();
+                if (lastModified.isValid() && lastModifiedOld.isValid() &&
+                    lastModifiedOld >= lastModified) { // With >=, cache won't thrash in eventually-consistent cdn.
+                    qCDebug(networking) << "Using cached version of" << _url.fileName();
+                } else {
+                    qCDebug(networking) << "Loaded" << _url.fileName() << "from the disk cache but the network version is newer, refreshing.";
+                    refresh();
+                }
+            } else if (!variant.isValid() || !variant.canConvert<QDateTime>() ||
+                !variant.value<QDateTime>().isValid() || variant.value<QDateTime>().isNull()) {
+                qCDebug(networking) << "Cannot determine when" << _url.fileName() << "was modified last, cached version might be outdated";
             }
-        } else if (!variant.isValid() || !variant.canConvert<QDateTime>() ||
-                   !variant.value<QDateTime>().isValid() || variant.value<QDateTime>().isNull()) {
-            qCDebug(networking) << "Cannot determine when" << _url.fileName() << "was modified last, cached version might be outdated";
-            return;
         }
-        qCDebug(networking) << "Loaded" << _url.fileName() << "from the disk cache but the network version is newer, refreshing.";
-        refresh();
     }
 }
 
