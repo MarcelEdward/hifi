@@ -365,9 +365,9 @@ void Resource::maybeRefresh() {
         QVariant variant = reply->header(QNetworkRequest::LastModifiedHeader);
         QNetworkCacheMetaData metaData = NetworkAccessManager::getInstance().cache()->metaData(_url);
 
-        QUrl url(reply->url().toString());
+        QUrl replyUrl(reply->url().toString());
         // check if the reply is the same url as the file from the cache
-        if (_url.fileName() == url.fileName()) {
+        if (_url.fileName() == replyUrl.fileName()) {
             if (variant.isValid() && variant.canConvert<QDateTime>() && metaData.isValid()) {
                 QDateTime lastModified = variant.value<QDateTime>();
                 QDateTime lastModifiedOld = metaData.lastModified();
